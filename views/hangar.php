@@ -99,7 +99,7 @@ use Hangar\Http\View;
             $i = $entry['info'];
             $manual = $entry['source'] === 'MANUAL';
             ob_start(); ?>
-            <span class="rounded bg-zinc-900/80 px-1.5 py-0.5 text-[10px] text-zinc-300" title="<?= $manual ? 'Manuell hinzugefügt, bleibt bei jedem Sync erhalten' : 'Von RSI übernommen, kehrt beim nächsten Sync zurück' ?>"><?= $manual ? 'manuell' : 'RSI' ?></span>
+            <?php if ($manual): ?><span class="rounded bg-zinc-900/80 px-1.5 py-0.5 text-[10px] text-zinc-300" title="Manuell hinzugefügt, bleibt bei jedem Sync erhalten">manuell</span><?php endif; ?>
             <form method="post" action="/hangar/remove">
               <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
               <input type="hidden" name="itemId" value="<?= e($entry['id']) ?>">
