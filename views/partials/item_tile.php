@@ -33,12 +33,17 @@ if ($notReady !== null) {
     </div>
     <div class="truncate text-xs text-zinc-400"><?= e($subtitle ?? '–') ?></div>
     <?php if ($count !== null): ?>
-      <div class="mt-1 text-sm font-medium tabular-nums text-zinc-100"><?= (int) $count ?>×</div>
-    <?php elseif ($meta): ?>
-      <div class="mt-1 truncate text-xs text-cyan-200/80"><?= e($meta) ?></div>
-    <?php endif; ?>
-    <?php if ($actions !== ''): ?>
-      <div class="mt-1 flex flex-wrap items-center gap-1.5 opacity-70 transition group-hover:opacity-100 group-focus-within:opacity-100"><?= $actions ?></div>
+      <div class="mt-1 flex items-center justify-between gap-2">
+        <span class="text-sm font-medium tabular-nums text-zinc-100"><?= (int) $count ?>×</span>
+        <?php if ($actions !== ''): ?>
+          <div class="flex items-center gap-1.5 opacity-70 transition group-hover:opacity-100 group-focus-within:opacity-100"><?= $actions ?></div>
+        <?php endif; ?>
+      </div>
+    <?php else: ?>
+      <?php if ($meta): ?><div class="mt-1 truncate text-xs text-cyan-200/80"><?= e($meta) ?></div><?php endif; ?>
+      <?php if ($actions !== ''): ?>
+        <div class="mt-1 flex flex-wrap items-center gap-1.5 opacity-70 transition group-hover:opacity-100 group-focus-within:opacity-100"><?= $actions ?></div>
+      <?php endif; ?>
     <?php endif; ?>
     <?php if ($notReady !== null): ?>
       <div class="mt-1 truncate text-[10px] uppercase tracking-wide text-zinc-400"><?= e($notReady) ?></div>
