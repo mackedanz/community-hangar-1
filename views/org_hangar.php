@@ -20,6 +20,9 @@ $input = 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm';
 
   <?php if ($all['entries']): ?>
     <form method="get" class="flex flex-wrap items-end gap-3 rounded border border-zinc-800 p-3">
+      <label class="flex w-full flex-col gap-1 text-xs text-zinc-400 sm:w-64">Suche
+        <input type="search" name="q" value="<?= e($filter['q'] ?? '') ?>" maxlength="100" placeholder="Name, Hersteller, Rolle …" class="<?= $input ?>">
+      </label>
       <?php foreach ($labels as $key => $label): ?>
         <label class="flex flex-col gap-1 text-xs text-zinc-400"><?= e($label) ?>
           <select name="<?= e($key) ?>" class="<?= $input ?>">

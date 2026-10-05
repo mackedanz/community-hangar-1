@@ -24,6 +24,27 @@ final class Text
         return preg_replace('/[^a-z0-9]+/', '', $n) ?? '';
     }
 
+    /**
+     * Volltextsuche: jedes Wort der Suche muss irgendwo in den Feldern vorkommen (Groß-/Kleinschreibung,
+     * Akzente, Leer- und Sonderzeichen egal, "mk ii" findet "F7A Hornet Mk II"). Leere Suche trifft immer.
+     * @param list<?string> $fields
+     */
+    public static function matchesQuery(array $fields, string $query): bool
+    {
+        $words = preg_split('/\s+/u', trim($query), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if (!$words) {
+            return true;
+        }
+        $hay = self::normalizeName(implode(' ', array_filter($fields, static fn ($f) => $f !== null && $f !== '')));
+        foreach ($words as $w) {
+            $n = self::normalizeName($w);
+            if ($n !== '' && !str_contains($hay, $n)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** URL-tauglicher Name; Umlaute werden umschrieben, Standard "orga" bei leerem Ergebnis. */
     public static function slugify(string $name, int $max = 40, string $fallback = 'orga'): string
     {

@@ -60,6 +60,18 @@ final class Hangar
         return $entry['catalogItem']['name'] ?? $entry['customName'] ?? 'Unbekannt';
     }
 
+    /** Volltextsuche im eigenen Hangar: Name, Hersteller, Typ, Pledge-Name und Katalogdaten. */
+    public static function matchesText(array $entry, string $q): bool
+    {
+        $c = $entry['catalogItem'] ?? null;
+        $s = FleetFilter::parseSpecs($c['data'] ?? null);
+        return Text::matchesQuery([
+            self::entryName($entry), $c['manufacturer'] ?? null, $entry['info']['type_label'] ?? null,
+            $entry['pledgeName'] ?? null, $entry['lti'] ? 'LTI' : null,
+            $s['career'], $s['role'], $s['status'], $s['sizeLabel'], $s['size'],
+        ], $q);
+    }
+
     /**
      * @template T of array{kind:string}
      * @param list<T> $entries

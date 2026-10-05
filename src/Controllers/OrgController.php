@@ -188,7 +188,7 @@ final class OrgController extends Controller
         $all = Community::getOrgFleet($org['id'], $viewer);
         $filter = FleetFilter::parseFilter($req->query);
         $options = FleetFilter::options(array_column($all['entries'], 'specs'));
-        $entries = array_values(array_filter($all['entries'], fn ($e) => FleetFilter::matches($e['specs'], $filter)));
+        $entries = array_values(array_filter($all['entries'], fn ($e) => FleetFilter::matches($e['specs'], $filter) && FleetFilter::matchesText($e, $filter['q'] ?? '')));
         return self::orgPage($org, 'org_hangar', [
             'all' => $all, 'filter' => $filter, 'options' => $options, 'entries' => $entries,
             'filtering' => $filter !== [],

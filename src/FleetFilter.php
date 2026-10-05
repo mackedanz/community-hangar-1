@@ -121,7 +121,24 @@ final class FleetFilter
                 $f[$k] = $n;
             }
         }
+        $q = $one('q');
+        if ($q !== null) {
+            $f['q'] = mb_substr($q, 0, 100);
+        }
         return $f;
+    }
+
+    /**
+     * Volltextsuche über Name, Hersteller und die Katalogdaten eines Eintrags.
+     * @param array<string,mixed> $entry mit name, manufacturer, specs
+     */
+    public static function matchesText(array $entry, string $q): bool
+    {
+        $s = $entry['specs'] ?? [];
+        return Text::matchesQuery([
+            $entry['name'] ?? null, $entry['manufacturer'] ?? null,
+            $s['career'] ?? null, $s['role'] ?? null, $s['status'] ?? null, $s['sizeLabel'] ?? null, $s['size'] ?? null,
+        ], $q);
     }
 
     /**

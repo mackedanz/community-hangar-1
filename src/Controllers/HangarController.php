@@ -19,10 +19,13 @@ final class HangarController extends Controller
     {
         $viewer = Auth::requireViewer($req);
         $term = trim((string) $req->query('add', ''));
+        $q = mb_substr(trim((string) $req->query('q', '')), 0, 100);
         $entries = Hangar::listHangar($viewer->id);
+        $shown = $q === '' ? $entries : array_values(array_filter($entries, fn ($e) => Hangar::matchesText($e, $q)));
         return self::page('hangar', [
             'entries' => $entries,
-            'groups' => Hangar::groupByKind($entries),
+            'q' => $q,
+            'groups' => Hangar::groupByKind($shown),
             'lastSync' => Community::getLastSync($viewer->id),
             'term' => $term,
             'results' => $term !== '' ? Hangar::searchCatalog($term) : [],

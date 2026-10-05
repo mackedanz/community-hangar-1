@@ -112,6 +112,34 @@ final class VisibilityFilterTest extends TestCase
         $this->assertSame(['career' => 'ground', 'crewMin' => 2], FleetFilter::parseFilter(['career' => 'ground', 'role' => '', 'crewMin' => '2', 'crewMax' => 'abc']));
     }
 
+    public function testParseFilterReadsAndTrimsSearchText(): void
+    {
+        $this->assertSame(['q' => 'hornet mk'], FleetFilter::parseFilter(['q' => '  hornet mk ']));
+        $this->assertSame([], FleetFilter::parseFilter(['q' => '   ']));
+        $this->assertSame(100, mb_strlen(FleetFilter::parseFilter(['q' => str_repeat('a', 300)])['q']));
+    }
+
+    public function testFullTextSearchMatchesNameManufacturerAndSpecs(): void
+    {
+        $e = ['name' => 'Cutlass Black', 'manufacturer' => 'Drake Interplanetary', 'specs' => self::cutlass()];
+        $this->assertTrue(FleetFilter::matchesText($e, ''));
+        $this->assertTrue(FleetFilter::matchesText($e, 'cutlass'));
+        $this->assertTrue(FleetFilter::matchesText($e, 'DRAKE black'));
+        $this->assertTrue(FleetFilter::matchesText($e, 'medium fighter'));
+        $this->assertTrue(FleetFilter::matchesText($e, 'combat'));
+        $this->assertFalse(FleetFilter::matchesText($e, 'cutlass red'));
+        $this->assertFalse(FleetFilter::matchesText($e, 'aegis'));
+    }
+
+    public function testFullTextSearchIgnoresCaseSpacingAndAccents(): void
+    {
+        $this->assertTrue(\Hangar\Text::matchesQuery(['F7A Hornet Mk II'], 'mk ii'));
+        $this->assertTrue(\Hangar\Text::matchesQuery(['F7A Hornet Mk II'], 'f7a-hornet'));
+        $this->assertTrue(\Hangar\Text::matchesQuery(['San\'tok.yāi'], 'santok yai'));
+        $this->assertTrue(\Hangar\Text::matchesQuery([null, ''], '   '));
+        $this->assertFalse(\Hangar\Text::matchesQuery([null], 'x'));
+    }
+
     public function testOptionsSortedAndUnique(): void
     {
         $this->assertSame(['Combat', 'Ground'], FleetFilter::options([self::cutlass(), self::ursa(), FleetFilter::parseSpecs(null)])['career']);
