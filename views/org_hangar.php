@@ -6,6 +6,8 @@
 /** @var list<array<string,mixed>> $entries */
 /** @var bool $filtering */
 /** @var int $totalShips */
+use Hangar\Http\View;
+
 $labels = ['career' => 'Karriere', 'role' => 'Rolle', 'status' => 'Status', 'sizeLabel' => 'Größenklasse', 'size' => 'Größe'];
 $input = 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm';
 ?>
@@ -47,18 +49,15 @@ $input = 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm';
   <?php elseif (!$entries): ?>
     <p class="text-zinc-400">Noch keine Schiffe in der Orga. <a href="/sync" class="text-indigo-400 hover:underline">Synchronisiere deinen Hangar mit RSI</a>.</p>
   <?php else: ?>
-    <ul class="divide-y divide-zinc-800 rounded border border-zinc-800">
+    <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
       <?php foreach ($entries as $en): ?>
-        <li class="flex items-center gap-4 p-3">
-          <div class="h-12 w-16 shrink-0 overflow-hidden rounded bg-zinc-900">
-            <?php if ($en['imageUrl']): ?><img src="<?= e($en['imageUrl']) ?>" alt="" loading="lazy" class="h-full w-full object-cover"><?php endif; ?>
-          </div>
-          <div class="min-w-0 flex-1">
-            <?php if ($en['href']): ?><a href="<?= e($en['href']) ?>" class="font-medium hover:underline"><?= e($en['name']) ?></a><?php else: ?><span class="font-medium"><?= e($en['name']) ?></span><?php endif; ?>
-            <div class="text-xs text-zinc-400"><?= e($en['manufacturer'] ?? '–') ?></div>
-          </div>
-          <div class="shrink-0 text-lg font-semibold tabular-nums"><?= (int) $en['count'] ?>×</div>
-        </li>
+        <?= View::partial('partials/item_tile', [
+          'name' => $en['name'],
+          'href' => $en['href'],
+          'subtitle' => $en['manufacturer'],
+          'count' => (int) $en['count'],
+          'image' => $en['imageUrl'],
+        ]) ?>
       <?php endforeach; ?>
     </ul>
   <?php endif; ?>

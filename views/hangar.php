@@ -81,36 +81,29 @@ use Hangar\Http\View;
         </div>
       </div>
       <div id="sec-<?= e($kind) ?>">
-        <ul class="divide-y divide-zinc-800 rounded border border-zinc-800">
-          <?php foreach ($list as $entry): $c = $entry['catalogItem']; $img = $c['imageSrc'] ?? $entry['info']['image_url'] ?? null; ?>
-            <li class="flex items-center gap-4 p-3">
-              <div class="h-12 w-16 shrink-0 overflow-hidden rounded bg-zinc-900">
-                <?php if ($img): ?><img src="<?= e($img) ?>" alt="" loading="lazy" class="h-full w-full object-cover"><?php endif; ?>
-              </div>
-              <div class="min-w-0 flex-1">
-                <?php if ($c): ?>
-                  <a href="/catalog/<?= e(strtolower($entry['kind'])) ?>/<?= e(rawurlencode($c['slug'])) ?>" class="font-medium hover:underline"><?= e(Hangar::entryName($entry)) ?></a>
-                <?php else: ?>
-                  <span class="font-medium"><?= e(Hangar::entryName($entry)) ?></span>
-                <?php endif; ?>
-                <?php if ($entry['info']): $i = $entry['info']; ?>
-                  <div class="text-xs text-zinc-400">
-                    <?php if ($i['type_label']): ?><span><?= e($i['type_label']) ?> · </span><?php endif; ?>
-                    <span class="line-clamp-2" title="<?= e($i['description'] ?? '') ?>"><?= e($i['description'] ?? 'Keine Beschreibung') ?></span>
-                    <?php if ($i['web_url']): ?><a href="<?= e($i['web_url']) ?>" target="_blank" rel="noopener noreferrer" class="text-indigo-400 hover:underline">Wiki</a><?php endif; ?>
-                  </div>
-                <?php else: ?>
-                  <div class="text-xs text-zinc-400"><?= e($c['manufacturer'] ?? '–') ?></div>
-                <?php endif; ?>
-              </div>
-              <div class="shrink-0 text-sm text-zinc-300"><?= (int) $entry['quantity'] ?>×<?php if ($entry['lti']): ?><span class="ml-2 text-zinc-400">LTI</span><?php endif; ?></div>
-              <span class="shrink-0 rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-400" title="<?= $entry['source'] === 'MANUAL' ? 'Manuell hinzugefügt, bleibt bei jedem Sync erhalten' : 'Von RSI übernommen, kehrt beim nächsten Sync zurück' ?>"><?= $entry['source'] === 'MANUAL' ? 'manuell' : 'RSI' ?></span>
-              <form method="post" action="/hangar/remove" class="shrink-0">
-                <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
-                <input type="hidden" name="itemId" value="<?= e($entry['id']) ?>">
-                <button class="text-sm text-red-400 hover:underline" title="<?= $entry['source'] === 'MANUAL' ? 'Aus dem Hangar entfernen' : 'Entfernen (kehrt beim nächsten RSI-Sync zurück)' ?>">Entfernen</button>
-              </form>
-            </li>
+        <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          <?php foreach ($list as $entry):
+            $c = $entry['catalogItem'];
+            $i = $entry['info'];
+            $manual = $entry['source'] === 'MANUAL';
+            ob_start(); ?>
+            <span class="rounded bg-zinc-900/80 px-1.5 py-0.5 text-[10px] text-zinc-300" title="<?= $manual ? 'Manuell hinzugefügt, bleibt bei jedem Sync erhalten' : 'Von RSI übernommen, kehrt beim nächsten Sync zurück' ?>"><?= $manual ? 'manuell' : 'RSI' ?></span>
+            <form method="post" action="/hangar/remove">
+              <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+              <input type="hidden" name="itemId" value="<?= e($entry['id']) ?>">
+              <button class="rounded bg-zinc-900/80 px-1.5 py-0.5 text-[10px] text-red-400 hover:bg-red-950" title="<?= $manual ? 'Aus dem Hangar entfernen' : 'Entfernen (kehrt beim nächsten RSI-Sync zurück)' ?>">Entfernen</button>
+            </form>
+            <?php $actions = (string) ob_get_clean(); ?>
+            <?= View::partial('partials/item_tile', [
+              'name' => Hangar::entryName($entry),
+              'href' => $c ? '/catalog/' . strtolower($entry['kind']) . '/' . rawurlencode($c['slug']) : null,
+              'subtitle' => $i && $i['type_label'] ? $i['type_label'] . ($c['manufacturer'] ?? null ? ' · ' . $c['manufacturer'] : '') : ($c['manufacturer'] ?? null),
+              'count' => (int) $entry['quantity'],
+              'image' => $c['imageSrc'] ?? $i['image_url'] ?? null,
+              'tooltip' => $i['description'] ?? Hangar::entryName($entry),
+              'lti' => (bool) $entry['lti'],
+              'actions' => $actions,
+            ]) ?>
           <?php endforeach; ?>
         </ul>
       </div>
