@@ -8,6 +8,7 @@ use Hangar\Auth;
 use Hangar\Community;
 use Hangar\Constants;
 use Hangar\Db;
+use Hangar\FleetFilter;
 use Hangar\Http\HttpException;
 use Hangar\Http\Request;
 use Hangar\Http\Response;
@@ -42,11 +43,14 @@ final class CatalogController extends Controller
         }
         $total = (int) Db::val("SELECT COUNT(*) FROM catalog_items WHERE $where", $params);
         $items = Db::all(
-            "SELECT id, kind, slug, name, manufacturer, image_url FROM catalog_items WHERE $where ORDER BY name ASC LIMIT " . self::PAGE_SIZE . ' OFFSET ' . (($page - 1) * self::PAGE_SIZE),
+            "SELECT id, kind, slug, name, manufacturer, image_url, data FROM catalog_items WHERE $where ORDER BY name ASC LIMIT " . self::PAGE_SIZE . ' OFFSET ' . (($page - 1) * self::PAGE_SIZE),
             $params,
         );
         foreach ($items as &$i) {
             $i['imageSrc'] = Community::imageSrc($i['kind'], $i['slug'], $i['image_url']);
+            $specs = FleetFilter::parseSpecs($i['data']);
+            $i['meta'] = implode(' · ', array_filter([$specs['sizeLabel'], $specs['career']]));
+            unset($i['data']);
         }
         unset($i);
 
