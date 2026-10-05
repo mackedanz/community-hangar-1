@@ -50,6 +50,7 @@ final class CatalogController extends Controller
             $i['imageSrc'] = Community::imageSrc($i['kind'], $i['slug'], $i['image_url']);
             $specs = FleetFilter::parseSpecs($i['data']);
             $i['meta'] = implode(' · ', array_filter([$specs['sizeLabel'], $specs['career']]));
+            $i['notReady'] = $i['kind'] === 'SHIP' ? FleetFilter::notReadyLabel($specs['status']) : null;
             unset($i['data']);
         }
         unset($i);

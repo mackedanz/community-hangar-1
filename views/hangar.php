@@ -6,6 +6,7 @@
 /** @var list<array<string,mixed>> $results */
 /** @var string $csrf */
 use Hangar\Constants;
+use Hangar\FleetFilter;
 use Hangar\Hangar;
 use Hangar\Http\View;
 ?>
@@ -99,9 +100,10 @@ use Hangar\Http\View;
               'href' => $c ? '/catalog/' . strtolower($entry['kind']) . '/' . rawurlencode($c['slug']) : null,
               'subtitle' => $i && $i['type_label'] ? $i['type_label'] . ($c['manufacturer'] ?? null ? ' · ' . $c['manufacturer'] : '') : ($c['manufacturer'] ?? null),
               'count' => (int) $entry['quantity'],
-              'image' => $c['imageSrc'] ?? $i['image_url'] ?? null,
+              'image' => $c['imageSrc'] ?? (!empty($i['image_url']) ? '/img/info/' . rawurlencode($i['match_key']) : null),
               'tooltip' => $i['description'] ?? Hangar::entryName($entry),
               'lti' => (bool) $entry['lti'],
+              'notReady' => $entry['kind'] === 'SHIP' && $c ? FleetFilter::notReadyLabel(FleetFilter::parseSpecs($c['data'] ?? null)['status']) : null,
               'actions' => $actions,
             ]) ?>
           <?php endforeach; ?>

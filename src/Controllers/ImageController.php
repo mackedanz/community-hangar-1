@@ -7,6 +7,7 @@ namespace Hangar\Controllers;
 use Hangar\Http\HttpException;
 use Hangar\Http\Request;
 use Hangar\Http\Response;
+use Hangar\Images\ItemImages;
 use Hangar\Images\ShipImages;
 
 final class ImageController extends Controller
@@ -18,7 +19,32 @@ final class ImageController extends Controller
         if (!ShipImages::validSlug($slug)) {
             throw HttpException::notFound();
         }
-        $img = ShipImages::ensure($slug);
+        return self::serve($req, ShipImages::ensure($slug));
+    }
+
+    /** GET /img/armor/{slug}: Rüstungen aus dem Katalog (Quelle: Star Citizen Wiki). */
+    public static function armor(Request $req, array $p): Response
+    {
+        return self::item($req, 'armor', (string) ($p['slug'] ?? ''));
+    }
+
+    /** GET /img/info/{key}: Ausrüstung und Loot aus dem Hangar (Quelle: Wiki, über item_info). */
+    public static function info(Request $req, array $p): Response
+    {
+        return self::item($req, 'info', (string) ($p['key'] ?? ''));
+    }
+
+    private static function item(Request $req, string $scope, string $key): Response
+    {
+        if (!ItemImages::validKey($key)) {
+            throw HttpException::notFound();
+        }
+        return self::serve($req, ItemImages::ensure($scope, $key));
+    }
+
+    /** @param array{path:string,mime:string}|null $img null = Platzhalter */
+    private static function serve(Request $req, ?array $img): Response
+    {
         if ($img === null) {
             // Kurz cachen, damit ein später erfolgreicher Download bald sichtbar wird
             return Response::text(ShipImages::placeholderSvg(), 200, 'image/svg+xml')

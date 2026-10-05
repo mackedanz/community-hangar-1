@@ -18,10 +18,17 @@ final class Community
         return $viewer !== null && in_array($orgId, $viewer->orgIds(), true);
     }
 
-    /** Bildquelle eines Katalogeintrags: Schiffe kommen aus dem lokalen Bild-Cache. @param array<string,mixed> $row */
+    /**
+     * Bildquelle eines Katalogeintrags: Schiffe und Rüstungen kommen aus dem lokalen Bild-Cache, nie direkt
+     * von fremden Servern. Rüstungen ohne bekannte Bild-Adresse haben kein Bild.
+     */
     public static function imageSrc(string $kind, string $slug, ?string $imageUrl): ?string
     {
-        return $kind === 'SHIP' ? '/img/ship/' . rawurlencode($slug) : $imageUrl;
+        return match ($kind) {
+            'SHIP' => '/img/ship/' . rawurlencode($slug),
+            'ARMOR' => $imageUrl !== null && $imageUrl !== '' ? '/img/armor/' . rawurlencode($slug) : null,
+            default => $imageUrl,
+        };
     }
 
     /**

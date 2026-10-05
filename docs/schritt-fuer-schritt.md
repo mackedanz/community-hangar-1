@@ -240,7 +240,7 @@ dürften sich anmelden.
 | Datenbank sichern | `docker compose exec db sh -c 'mariadb-dump -u hangar -p"$MARIADB_PASSWORD" hangar' > sicherung.sql` |
 | Stoppen (Daten bleiben) | `docker compose down` |
 
-Gesichert werden sollte die Datenbank. Die Schiffsbilder (Volume `ship-images`) lädt die App bei Bedarf selbst nach.
+Gesichert werden sollte die Datenbank. Die Bilder von Schiffen, Rüstungen und Ausrüstung (Volume `ship-images`) lädt die App bei Bedarf selbst nach.
 
 **Datenbank ansehen:** Sie ist von außen nicht erreichbar. Auf dem Server: `docker compose exec db sh -c 'mariadb -u hangar -p"$MARIADB_PASSWORD" hangar'`.
 Für ein Programm wie HeidiSQL gibst du den Port nur im internen Netz frei, z. B. mit einer `docker-compose.override.yml`

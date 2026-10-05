@@ -9,6 +9,31 @@ final class FleetFilter
 {
     public const SELECT_FILTERS = ['career', 'role', 'status', 'sizeLabel', 'size'];
 
+    private static function statusKey(?string $status): string
+    {
+        return strtolower(str_replace([' ', '_'], '-', trim((string) $status)));
+    }
+
+    /** Flugbereit oder unbekannt: nur Schiffe mit bekanntem, anderem Status gelten als noch nicht fertig. */
+    public static function isFlightReady(?string $status): bool
+    {
+        $k = self::statusKey($status);
+        return $k === '' || $k === 'flight-ready';
+    }
+
+    /** Lesbarer Status für Schiffe, die nicht flight ready sind; sonst null. */
+    public static function notReadyLabel(?string $status): ?string
+    {
+        if (self::isFlightReady($status)) {
+            return null;
+        }
+        return match (self::statusKey($status)) {
+            'in-concept' => 'In Konzept',
+            'in-production' => 'In Produktion',
+            default => (string) $status,
+        };
+    }
+
     /** @return array{career:?string,role:?string,status:?string,sizeLabel:?string,size:?string,crewMin:int|float|null,crewMax:int|float|null,cargo:int|float|null} */
     public static function parseSpecs(mixed $json): array
     {

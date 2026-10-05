@@ -6,6 +6,7 @@
 /** @var list<array<string,mixed>> $entries */
 /** @var bool $filtering */
 /** @var int $totalShips */
+use Hangar\FleetFilter;
 use Hangar\Http\View;
 
 $labels = ['career' => 'Karriere', 'role' => 'Rolle', 'status' => 'Status', 'sizeLabel' => 'Größenklasse', 'size' => 'Größe'];
@@ -57,6 +58,7 @@ $input = 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm';
           'subtitle' => $en['manufacturer'],
           'count' => (int) $en['count'],
           'image' => $en['imageUrl'],
+          'notReady' => FleetFilter::notReadyLabel($en['specs']['status'] ?? null),
         ]) ?>
       <?php endforeach; ?>
     </ul>

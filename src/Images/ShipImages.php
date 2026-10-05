@@ -28,7 +28,7 @@ final class ShipImages
     /** Nach einem Fehlschlag wird frühestens nach dieser Zeit erneut versucht. */
     public const RETRY_SECONDS = 86400;
     private const EXT = [IMAGETYPE_JPEG => 'jpg', IMAGETYPE_PNG => 'png', IMAGETYPE_WEBP => 'webp'];
-    private const MIME = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp'];
+    public const MIME = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp'];
 
     public static function validSlug(string $slug): bool
     {
@@ -176,20 +176,21 @@ final class ShipImages
         return false;
     }
 
-    public static function hostAllowed(string $url): bool
+    /** @param list<string> $hosts */
+    public static function hostAllowed(string $url, array $hosts = self::ALLOWED_HOSTS): bool
     {
         $p = parse_url($url);
-        return is_array($p) && ($p['scheme'] ?? '') === 'https' && in_array(strtolower($p['host'] ?? ''), self::ALLOWED_HOSTS, true);
+        return is_array($p) && ($p['scheme'] ?? '') === 'https' && in_array(strtolower($p['host'] ?? ''), $hosts, true);
     }
 
     /**
      * Lädt ein Bild. Weiterleitungen werden einzeln verfolgt, jeder Schritt muss auf einen erlaubten
-     * Host zeigen. @return array{body:string,ext:string}|null
+     * Host zeigen. @param list<string> $hosts @return array{body:string,ext:string}|null
      */
-    private static function download(string $url): ?array
+    public static function download(string $url, array $hosts = self::ALLOWED_HOSTS): ?array
     {
         for ($i = 0; $i < 5; $i++) {
-            if (!self::hostAllowed($url)) {
+            if (!self::hostAllowed($url, $hosts)) {
                 return null;
             }
             $res = Client::get($url, ['Accept' => 'image/*'], 15, false, self::MAX_BYTES);
@@ -221,7 +222,13 @@ final class ShipImages
     /** Schreibt atomar (Temp-Datei + rename). @return array{path:string,mime:string}|null */
     private static function store(string $slug, string $body, string $ext): ?array
     {
-        $path = self::dir() . "/$slug.$ext";
+        return self::storeIn(self::dir(), $slug, $body, $ext);
+    }
+
+    /** Schreibt atomar in einen beliebigen Bildordner. @return array{path:string,mime:string}|null */
+    public static function storeIn(string $dir, string $name, string $body, string $ext): ?array
+    {
+        $path = $dir . "/$name.$ext";
         $tmp = $path . '.' . bin2hex(random_bytes(4)) . '.tmp';
         if (file_put_contents($tmp, $body) === false) {
             return null;

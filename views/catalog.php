@@ -44,6 +44,7 @@ $pageLink = 'rounded border border-cyan-800/60 bg-teal-950/50 px-3 py-1.5 hover:
           'href' => '/catalog/' . strtolower($item['kind']) . '/' . rawurlencode($item['slug']),
           'subtitle' => $item['manufacturer'],
           'meta' => $item['meta'] ?? null,
+          'notReady' => $item['notReady'] ?? null,
           'image' => $item['imageSrc'],
           'stretch' => true,
         ]) ?>

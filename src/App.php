@@ -44,6 +44,8 @@ final class App
         $r->get('/catalog', [CatalogController::class, 'index']);
         $r->get('/catalog/{kind}/{slug}', [CatalogController::class, 'show']);
         $r->get('/img/ship/{slug}', [ImageController::class, 'ship']);
+        $r->get('/img/armor/{slug}', [ImageController::class, 'armor']);
+        $r->get('/img/info/{key}', [ImageController::class, 'info']);
 
         // Mein Hangar
         $r->get('/hangar', [HangarController::class, 'index']);

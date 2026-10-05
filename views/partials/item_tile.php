@@ -11,6 +11,7 @@
  * @var ?string $tooltip Beschreibung beim Darüberfahren
  * @var bool $lti
  * @var string $actions fertig escaptes HTML (Herkunft, Entfernen), oben rechts
+ * @var ?string $notReady Status, wenn das Schiff noch nicht flight ready ist (Kachel wird ausgegraut)
  */
 $subtitle = $subtitle ?? null;
 $image = $image ?? null;
@@ -20,8 +21,12 @@ $actions = $actions ?? '';
 $count = $count ?? null;
 $meta = $meta ?? null;
 $stretch = $stretch ?? false;
+$notReady = $notReady ?? null;
+if ($notReady !== null) {
+    $tooltip = $name . ' – nicht flight ready (' . $notReady . ')';
+}
 ?>
-<li class="group relative flex flex-col overflow-hidden rounded border border-cyan-800/60 bg-teal-950/50 transition hover:border-cyan-500/80" title="<?= e($tooltip) ?>">
+<li class="group relative flex flex-col overflow-hidden rounded border border-cyan-800/60 bg-teal-950/50 transition hover:border-cyan-500/80<?= $notReady !== null ? ' opacity-50 grayscale hover:opacity-90 hover:grayscale-0' : '' ?>" title="<?= e($tooltip) ?>">
   <div class="p-2.5<?= $actions !== '' ? ' pr-16' : '' ?>">
     <div class="truncate text-sm font-medium text-zinc-100">
       <?php if ($href): ?><a href="<?= e($href) ?>" class="hover:underline<?= $stretch ? ' after:absolute after:inset-0' : '' ?>"><?= e($name) ?></a><?php else: ?><?= e($name) ?><?php endif; ?>
@@ -34,6 +39,9 @@ $stretch = $stretch ?? false;
       </div>
     <?php elseif ($meta): ?>
       <div class="mt-1 truncate text-xs text-cyan-200/80"><?= e($meta) ?></div>
+    <?php endif; ?>
+    <?php if ($notReady !== null): ?>
+      <div class="mt-1 truncate text-[10px] uppercase tracking-wide text-zinc-400"><?= e($notReady) ?></div>
     <?php endif; ?>
   </div>
   <div class="mt-auto aspect-[4/3] w-full bg-black/20">
