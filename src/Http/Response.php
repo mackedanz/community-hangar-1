@@ -82,6 +82,14 @@ final class Response
     /** Antwort beenden und die Nacharbeiten ausführen; Fehler dort betreffen den Nutzer nicht mehr. */
     public function finish(): void
     {
+        if ($this->after !== []) {
+            // Ohne fastcgi_finish_request (Apache mit mod_php) gilt die Antwort erst als fertig, wenn Länge und
+            // Verbindungsende feststehen; sonst wartet der Aufrufer (z. B. Discord, 3 Sekunden) auf die Nacharbeit.
+            $this->headers['Content-Length'] = (string) strlen($this->body);
+            $this->headers['Connection'] = 'close';
+            ignore_user_abort(true);
+            set_time_limit(120);
+        }
         $this->send();
         if ($this->after === []) {
             return;
@@ -89,7 +97,9 @@ final class Response
         if (function_exists('fastcgi_finish_request')) {
             fastcgi_finish_request();
         } else {
-            @ob_end_flush();
+            while (ob_get_level() > 0) {
+                @ob_end_flush();
+            }
             flush();
         }
         foreach ($this->after as $fn) {
