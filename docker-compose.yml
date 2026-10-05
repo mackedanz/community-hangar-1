@@ -1,0 +1,80 @@
+# Community-Hangar (PHP + MariaDB) – fertiger Stack
+#
+# 1. Diese Datei und .env.docker.example herunterladen, .env.docker.example in .env umbenennen
+#    und ausfüllen (Domain, Discord-Zugangsdaten, Datenbank-Passwort).
+# 2. docker compose up -d
+#
+# Datenbank, Migrationen, Schiffskatalog (RSI Ship Matrix) und HTTPS-Zertifikat werden automatisch
+# eingerichtet. Updates: docker compose pull && docker compose up -d
+#
+# Alle Einstellungen kommen aus .env (bzw. den Umgebungsvariablen der Portainer-Stack-Oberfläche).
+# Pflichtwerte ohne Eintrag führen zu einer klaren Fehlermeldung beim Start.
+
+services:
+  app:
+    image: ${HANGAR_IMAGE:-ghcr.io/mackedanz/community-hangar-1:latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN fehlt (z. B. hangar.example.de)}
+      AUTH_URL: https://${DOMAIN}
+      AUTH_DISCORD_ID: ${AUTH_DISCORD_ID:?AUTH_DISCORD_ID fehlt}
+      AUTH_DISCORD_SECRET: ${AUTH_DISCORD_SECRET:?AUTH_DISCORD_SECRET fehlt}
+      DB_HOST: db
+      DB_NAME: hangar
+      DB_USER: hangar
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD fehlt}
+      # Server-Admin (Discord-ID, mehrere mit Komma); Wechsel: in .env ändern, dann docker compose up -d
+      SERVER_ADMIN_DISCORD_ID: ${SERVER_ADMIN_DISCORD_ID:-}
+      # Onboarding-Bot und Zugangsliste (optional, siehe .env.docker.example)
+      DISCORD_PUBLIC_KEY: ${DISCORD_PUBLIC_KEY:-}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+      LOGIN_REQUIRES_ALLOWLIST: ${LOGIN_REQUIRES_ALLOWLIST:-0}
+      # Links zu Impressum/Datenschutz des Betreibers (optional)
+      LEGAL_IMPRINT_URL: ${LEGAL_IMPRINT_URL:-}
+      LEGAL_PRIVACY_URL: ${LEGAL_PRIVACY_URL:-}
+      # Katalog-Abgleich in Sekunden (Standard: einmal pro Woche)
+      CATALOG_SYNC_INTERVAL_SECONDS: ${CATALOG_SYNC_INTERVAL_SECONDS:-604800}
+    volumes:
+      - ship-images:/var/www/html/storage/images
+    # Ohne den Caddy-Dienst unten (eigener Reverse-Proxy vorhanden) stattdessen den Port freigeben:
+    # ports:
+    #   - "8080:80"
+
+  db:
+    image: mariadb:11.8
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: hangar
+      MARIADB_USER: hangar
+      MARIADB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD fehlt}
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # HTTPS mit automatischem Let's-Encrypt-Zertifikat. Die Domain muss per DNS auf diesen
+  # Server zeigen, Port 80 und 443 müssen erreichbar sein.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    command: caddy reverse-proxy --from ${DOMAIN:?DOMAIN fehlt} --to app:80
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+    depends_on:
+      - app
+
+volumes:
+  db-data:
+  ship-images:
+  caddy-data:

@@ -1,0 +1,8 @@
+/tools/
+/vendor/
+/storage/images/
+/storage/*.log
+.env
+/node_modules/
+/.phpunit.cache/
+/public/css/

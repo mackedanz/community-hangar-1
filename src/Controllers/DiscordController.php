@@ -1,0 +1,160 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Hangar\Controllers;
+
+use Hangar\Discord;
+use Hangar\DiscordAuthError;
+use Hangar\DiscordBot;
+use Hangar\DiscordUnavailableError;
+use Hangar\Http\Request;
+use Hangar\Http\Response;
+use Hangar\OrgError;
+use Hangar\Orgs;
+use Hangar\Onboarding;
+
+/**
+ * POST /discord/interactions: Endpunkt für die Slash-Befehle des Onboarding-Bots (kein Dauerprozess nötig).
+ * Jede Anfrage ist von Discord per Ed25519 signiert; Server-ID und aufrufende Person kommen aus der
+ * signierten Interaktion, nicht aus Eingaben.
+ */
+final class DiscordController extends Controller
+{
+    private const PING = 1;
+    private const COMMAND = 2;
+    private const COMPONENT = 3;
+    private const REPLY = 4;
+    private const UPDATE = 7;
+    private const EPHEMERAL = 64;
+
+    public static function interactions(Request $req): Response
+    {
+        if (!DiscordBot::verifySignature($req->body, $req->header('x-signature-ed25519'), $req->header('x-signature-timestamp'))) {
+            return Response::text('invalid request signature', 401);
+        }
+        $i = json_decode($req->body, true);
+        if (!is_array($i)) {
+            return Response::text('bad request', 400);
+        }
+        $type = (int) ($i['type'] ?? 0);
+        if ($type === self::PING) {
+            return Response::json(['type' => 1]);
+        }
+        if ($type !== self::COMMAND && $type !== self::COMPONENT) {
+            return Response::text('unsupported', 400);
+        }
+
+        $guildId = (string) ($i['guild_id'] ?? '');
+        $user = $i['member']['user'] ?? null;
+        if ($guildId === '' || !is_array($user) || empty($user['id'])) {
+            return self::say('Dieser Befehl funktioniert nur auf einem Discord-Server.');
+        }
+        // Discord liefert die Rechte der aufrufenden Person in der Interaktion mit (Owner eingeschlossen).
+        if (!Discord::isGuildAdmin(['permissions' => $i['member']['permissions'] ?? '0'])) {
+            return self::say('Das dürfen nur Server-Admins (Administrator oder „Server verwalten“).');
+        }
+        $invokerId = (string) $user['id'];
+        $invokerName = (string) (($i['member']['nick'] ?? null) ?: ($user['global_name'] ?? null) ?: ($user['username'] ?? 'Discord-Nutzer'));
+
+        try {
+            $org = Onboarding::ensureOrg($guildId, $invokerId, $invokerName);
+            if ($type === self::COMMAND) {
+                return self::panel($org, self::REPLY, null);
+            }
+            return self::component($org, $i);
+        } catch (OrgError $e) {
+            return self::say($e->getMessage());
+        } catch (DiscordAuthError | DiscordUnavailableError $e) {
+            return self::say($e->getMessage());
+        }
+    }
+
+    /** @param array<string,mixed> $org @param array<string,mixed> $i */
+    private static function component(array $org, array $i): Response
+    {
+        $id = (string) ($i['data']['custom_id'] ?? '');
+        $token = (string) ($i['token'] ?? '');
+        $sync = false;
+        if ($id === 'onb:use' || $id === 'onb:plan') {
+            $values = array_values(array_map('strval', (array) ($i['data']['values'] ?? [])));
+            $names = [];
+            foreach ((array) ($i['data']['resolved']['roles'] ?? []) as $rid => $role) {
+                if (is_array($role) && isset($role['name'])) {
+                    $names[(string) $rid] = (string) $role['name'];
+                }
+            }
+            Onboarding::setRoles($org['id'], $id === 'onb:use' ? 'use' : 'plan', $values, $names);
+            $org = Orgs::find($org['id']) ?? $org;
+            $sync = Orgs::parseRoleIds($org['member_role_ids']) !== [];
+        } elseif ($id === 'onb:sync') {
+            $sync = true;
+        } else {
+            return self::say('Unbekannte Aktion.');
+        }
+
+        $res = self::panel($org, self::UPDATE, $sync ? 'Mitglieder werden abgeglichen …' : null);
+        if ($sync) {
+            $orgId = (string) $org['id'];
+            // Der Abgleich kann länger als die 3 Sekunden dauern, die Discord für die Antwort lässt.
+            $res->afterSend(static function () use ($orgId, $token): void {
+                try {
+                    $r = Onboarding::syncAllowlist($orgId);
+                    $note = "Fertig: {$r['total']} Mitglieder dürfen sich anmelden (+{$r['added']}, −{$r['removed']}).";
+                } catch (OrgError | DiscordAuthError | DiscordUnavailableError $e) {
+                    $note = 'Abgleich nicht möglich: ' . $e->getMessage();
+                }
+                $org = Orgs::find($orgId);
+                if ($org !== null) {
+                    DiscordBot::editOriginal($token, self::panelData($org, $note));
+                }
+            });
+        }
+        return $res;
+    }
+
+    /** @param array<string,mixed> $org */
+    private static function panel(array $org, int $type, ?string $note): Response
+    {
+        return Response::json(['type' => $type, 'data' => self::panelData($org, $note)]);
+    }
+
+    /**
+     * Nachricht mit zwei Rollenauswahlen (Nutzung, Planung) und der Schaltfläche für den Abgleich.
+     * @param array<string,mixed> $org @return array<string,mixed>
+     */
+    public static function panelData(array $org, ?string $note): array
+    {
+        $labels = Orgs::parseRoleLabels($org['role_labels']);
+        $select = static function (string $customId, string $placeholder, array $ids): array {
+            $s = ['type' => 6, 'custom_id' => $customId, 'placeholder' => $placeholder, 'min_values' => 0, 'max_values' => Orgs::MAX_ROLES];
+            if ($ids !== []) {
+                $s['default_values'] = array_map(static fn (string $id): array => ['id' => $id, 'type' => 'role'], $ids);
+            }
+            return ['type' => 1, 'components' => [$s]];
+        };
+        $use = Orgs::parseRoleIds($org['member_role_ids']);
+        $plan = Orgs::parseRoleIds($org['planner_role_ids']);
+        $names = static fn (array $ids): string => $ids === [] ? '–' : implode(', ', array_map(static fn (string $id): string => $labels[$id] ?? "<@&$id>", $ids));
+        $text = "**Community-Hangar: {$org['name']}**\n"
+            . "Dürfen das Tool nutzen: {$names($use)}\n"
+            . "Dürfen Events planen: {$names($plan)}\n\n"
+            . 'Wähle unten die Rollen. Wer eine Nutzungs- oder Planer-Rolle hat, darf sich auf ' . \Hangar\Config::appUrl() . ' anmelden.'
+            . ($note !== null ? "\n\n$note" : '');
+        return [
+            'flags' => self::EPHEMERAL,
+            'content' => $text,
+            'allowed_mentions' => ['parse' => []],
+            'components' => [
+                $select('onb:use', 'Wer darf das Tool nutzen?', $use),
+                $select('onb:plan', 'Wer darf Events planen? (optional)', $plan),
+                ['type' => 1, 'components' => [['type' => 2, 'style' => 2, 'custom_id' => 'onb:sync', 'label' => 'Mitglieder jetzt abgleichen']]],
+            ],
+        ];
+    }
+
+    private static function say(string $text): Response
+    {
+        return Response::json(['type' => self::REPLY, 'data' => ['content' => $text, 'flags' => self::EPHEMERAL, 'allowed_mentions' => ['parse' => []]]]);
+    }
+}

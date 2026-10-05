@@ -1,0 +1,377 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Hangar\Tests;
+
+use Hangar\App;
+use Hangar\Auth;
+use Hangar\Db;
+use Hangar\Env;
+use Hangar\Http\Client;
+use Hangar\Http\Request;
+use Hangar\Http\Response;
+use Hangar\Onboarding;
+use Hangar\OrgError;
+
+/** Onboarding-Bot: Signaturprüfung, /einrichten, Rollenauswahl, Zugangsliste und Anmelde-Sperre. */
+final class OnboardingTest extends DbTestCase
+{
+    private const GUILD = '900000000000000001';
+    private const ROLE_USE = '800000000000000001';
+    private const ROLE_PLAN = '800000000000000002';
+    private const ADMIN = '700000000000000001';
+
+    private string $secretKey;
+    /** @var list<array{0:string,1:string,2:?string}> */
+    private array $calls = [];
+    /** @var list<array<string,mixed>> Mitglieder, die der nachgebaute Server zurückgibt */
+    private array $members = [];
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Auth::reset();
+        $pair = sodium_crypto_sign_keypair();
+        $this->secretKey = sodium_crypto_sign_secretkey($pair);
+        Env::set('DISCORD_PUBLIC_KEY', bin2hex(sodium_crypto_sign_publickey($pair)));
+        Env::set('DISCORD_BOT_TOKEN', 'bot-token');
+        Env::set('AUTH_DISCORD_ID', '600000000000000001');
+        $this->calls = [];
+        $this->members = [
+            $this->member('700000000000000001', 'Chef', [self::ROLE_USE]),
+            $this->member('700000000000000002', 'Pilot', [self::ROLE_USE]),
+            $this->member('700000000000000003', 'Planer', [self::ROLE_PLAN]),
+            $this->member('700000000000000004', 'Gast', []),
+            ['user' => ['id' => '700000000000000005', 'username' => 'Bot', 'bot' => true], 'roles' => [self::ROLE_USE]],
+        ];
+        Client::fake(function (string $method, string $url, array $h, ?string $body): array {
+            $this->calls[] = [$method, $url, $body];
+            $json = fn (mixed $b, int $s = 200): array => ['status' => $s, 'body' => json_encode($b), 'headers' => []];
+            if (str_contains($url, '/members?')) {
+                return $json($this->members);
+            }
+            if (preg_match('#/guilds/\d+$#', $url)) {
+                return $json(['id' => self::GUILD, 'name' => 'Mac Dance', 'icon' => 'ic']);
+            }
+            if (str_contains($url, '/webhooks/')) {
+                return $json([]);
+            }
+            return $json([], 500);
+        });
+    }
+
+    /** @param list<string> $roles @return array<string,mixed> */
+    private function member(string $id, string $name, array $roles): array
+    {
+        return ['user' => ['id' => $id, 'username' => strtolower($name), 'global_name' => $name, 'avatar' => 'av' . $id], 'roles' => $roles];
+    }
+
+    /** @param array<string,mixed> $interaction */
+    private function post(array $interaction, ?string $forgedSig = null): Response
+    {
+        $body = json_encode($interaction);
+        $ts = (string) time();
+        $sig = $forgedSig ?? bin2hex(sodium_crypto_sign_detached($ts . $body, $this->secretKey));
+        return App::handle(new Request('POST', '/discord/interactions', [], [], [
+            'x-signature-ed25519' => $sig, 'x-signature-timestamp' => $ts, 'content-type' => 'application/json',
+        ], [], $body));
+    }
+
+    /** @param array<string,mixed> $extra @return array<string,mixed> */
+    private function command(string $perms = '32', array $extra = []): array
+    {
+        return $extra + [
+            'type' => 2, 'token' => 'tok', 'guild_id' => self::GUILD, 'data' => ['name' => 'einrichten'],
+            'member' => ['permissions' => $perms, 'user' => ['id' => self::ADMIN, 'username' => 'chef', 'global_name' => 'Chef']],
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function json(Response $r): array
+    {
+        return json_decode($r->body, true);
+    }
+
+    // --- Signatur ----------------------------------------------------------------------------
+
+    public function testPingIsAnsweredAndBadSignatureRejected(): void
+    {
+        $this->assertSame(['type' => 1], $this->json($this->post(['type' => 1])));
+        $this->assertSame(401, $this->post(['type' => 1], str_repeat('ab', 64))->status);
+        $this->assertSame(401, $this->post(['type' => 1], 'kein-hex')->status);
+    }
+
+    public function testWithoutPublicKeyEverythingIsRejected(): void
+    {
+        Env::set('DISCORD_PUBLIC_KEY', null);
+        $this->assertSame(401, $this->post(['type' => 1])->status);
+    }
+
+    public function testTamperedBodyIsRejected(): void
+    {
+        $ts = (string) time();
+        $sig = bin2hex(sodium_crypto_sign_detached($ts . '{"type":1}', $this->secretKey));
+        $res = App::handle(new Request('POST', '/discord/interactions', [], [], [
+            'x-signature-ed25519' => $sig, 'x-signature-timestamp' => $ts,
+        ], [], '{"type":2}'));
+        $this->assertSame(401, $res->status);
+    }
+
+    // --- /einrichten -------------------------------------------------------------------------
+
+    public function testNonAdminGetsRefusedAndNothingIsCreated(): void
+    {
+        $res = $this->json($this->post($this->command('0')));
+        $this->assertStringContainsString('Server-Admins', $res['data']['content']);
+        $this->assertSame(0, (int) Db::val('SELECT COUNT(*) FROM organizations'));
+    }
+
+    public function testCommandOutsideAGuildIsRefused(): void
+    {
+        $i = $this->command();
+        unset($i['guild_id']);
+        $this->assertStringContainsString('nur auf einem Discord-Server', $this->json($this->post($i))['data']['content']);
+    }
+
+    public function testCommandCreatesOrgAndListsInvokerPermanently(): void
+    {
+        $res = $this->json($this->post($this->command('8')));
+        $org = Db::one('SELECT * FROM organizations');
+        $this->assertSame('Mac Dance', $org['name']);
+        $this->assertSame(self::GUILD, $org['discord_guild_id']);
+        $this->assertSame(self::ADMIN, $org['created_by_id']);
+        $row = Db::one('SELECT * FROM org_allowed_members WHERE org_id = ?', [$org['id']]);
+        $this->assertSame(self::ADMIN, $row['discord_id']);
+        $this->assertSame(1, (int) $row['fixed']);
+        // Antwort: nur für die aufrufende Person sichtbar, zwei Rollenauswahlen + Schaltfläche
+        $this->assertSame(64, $res['data']['flags']);
+        $this->assertSame(['onb:use', 'onb:plan'], [$res['data']['components'][0]['components'][0]['custom_id'], $res['data']['components'][1]['components'][0]['custom_id']]);
+        $this->assertSame(10, $res['data']['components'][0]['components'][0]['max_values']);
+        $this->assertSame(6, $res['data']['components'][0]['components'][0]['type']);
+    }
+
+    public function testCommandIsRepeatableAndReusesExistingOrg(): void
+    {
+        $this->post($this->command());
+        $this->post($this->command());
+        $this->assertSame(1, (int) Db::val('SELECT COUNT(*) FROM organizations'));
+        $this->assertSame(1, (int) Db::val('SELECT COUNT(*) FROM org_allowed_members'));
+    }
+
+    public function testBannedGuildCannotBeSetUp(): void
+    {
+        Db::insert('banned_guilds', ['discord_guild_id' => self::GUILD, 'name' => 'Fremd', 'banned_by_id' => 'x']);
+        $res = $this->json($this->post($this->command()));
+        $this->assertStringContainsString('gesperrt', $res['data']['content']);
+        $this->assertSame(0, (int) Db::val('SELECT COUNT(*) FROM organizations'));
+    }
+
+    // --- Rollenauswahl und Abgleich ----------------------------------------------------------
+
+    /** @param list<string> $values @param array<string,string> $names */
+    private function select(string $customId, array $values, array $names = []): Response
+    {
+        $roles = [];
+        foreach ($names as $id => $n) {
+            $roles[$id] = ['id' => $id, 'name' => $n];
+        }
+        return $this->post($this->command('32', ['type' => 3, 'data' => ['custom_id' => $customId, 'values' => $values, 'resolved' => ['roles' => $roles]]]));
+    }
+
+    public function testRoleSelectionSavesRolesAndNames(): void
+    {
+        $this->post($this->command());
+        $res = $this->select('onb:use', [self::ROLE_USE], [self::ROLE_USE => 'Mitglied']);
+        $org = Db::one('SELECT * FROM organizations');
+        $this->assertSame(self::ROLE_USE, $org['member_role_ids']);
+        $this->assertSame(['Mitglied'], array_values(json_decode($org['role_labels'], true)));
+        $this->assertSame(7, $this->json($res)['type']);
+        // gewählte Rolle ist in der Auswahl vorbelegt
+        $this->assertSame(self::ROLE_USE, $this->json($res)['data']['components'][0]['components'][0]['default_values'][0]['id']);
+
+        $this->select('onb:plan', [self::ROLE_PLAN], [self::ROLE_PLAN => 'Planer']);
+        $this->assertSame(self::ROLE_PLAN, Db::val('SELECT planner_role_ids FROM organizations'));
+        $this->assertSame(self::ROLE_USE, Db::val('SELECT member_role_ids FROM organizations'));
+    }
+
+    public function testSelectionIsDeniedForNonAdmins(): void
+    {
+        $this->post($this->command());
+        $i = $this->command('0', ['type' => 3, 'data' => ['custom_id' => 'onb:use', 'values' => [self::ROLE_USE]]]);
+        $this->post($i);
+        $this->assertNull(Db::val('SELECT member_role_ids FROM organizations'));
+    }
+
+    public function testInvalidRoleIdIsRejected(): void
+    {
+        $this->post($this->command());
+        $res = $this->json($this->select('onb:use', ['abc']));
+        $this->assertStringContainsString('17 bis 20 Ziffern', $res['data']['content']);
+        $this->assertNull(Db::val('SELECT member_role_ids FROM organizations'));
+    }
+
+    public function testSyncWritesRoleHoldersWithIdNameAndAvatar(): void
+    {
+        $this->post($this->command());
+        $orgId = (string) Db::val('SELECT id FROM organizations');
+        Onboarding::setRoles($orgId, 'use', [self::ROLE_USE], []);
+        Onboarding::setRoles($orgId, 'plan', [self::ROLE_PLAN], []);
+        $r = Onboarding::syncAllowlist($orgId);
+
+        // Chef (fix + Rolle), Pilot, Planer; nicht: Gast ohne Rolle, Bot
+        $this->assertSame(3, $r['total']);
+        $this->assertSame(2, $r['added']);
+        $ids = $this->ids('org_allowed_members', 'discord_id');
+        sort($ids);
+        $this->assertSame(['700000000000000001', '700000000000000002', '700000000000000003'], $ids);
+        $pilot = Db::one("SELECT * FROM org_allowed_members WHERE discord_id = '700000000000000002'");
+        $this->assertSame('Pilot', $pilot['name']);
+        $this->assertSame('https://cdn.discordapp.com/avatars/700000000000000002/av700000000000000002.png', $pilot['avatar_url']);
+        $this->assertNotNull(Db::val('SELECT allowlist_synced_at FROM organizations'));
+    }
+
+    public function testSyncRemovesLostMembersButKeepsFixedOnes(): void
+    {
+        $this->post($this->command());
+        $orgId = (string) Db::val('SELECT id FROM organizations');
+        Onboarding::setRoles($orgId, 'use', [self::ROLE_USE], []);
+        Onboarding::syncAllowlist($orgId);
+        $this->members = [$this->member('700000000000000002', 'Pilot', [])]; // Pilot hat die Rolle verloren, Chef ist weg
+        $r = Onboarding::syncAllowlist($orgId);
+        $this->assertSame(1, $r['total']);
+        $this->assertSame([self::ADMIN], $this->ids('org_allowed_members', 'discord_id'));
+    }
+
+    public function testSyncNeedsAtLeastOneUseRole(): void
+    {
+        $this->post($this->command());
+        $this->expectException(OrgError::class);
+        Onboarding::syncAllowlist((string) Db::val('SELECT id FROM organizations'));
+    }
+
+    public function testSelectionTriggersBackgroundSyncAndEditsTheMessage(): void
+    {
+        $this->post($this->command());
+        $res = $this->select('onb:use', [self::ROLE_USE], [self::ROLE_USE => 'Mitglied']);
+        $this->assertCount(1, $res->after);
+        $this->assertStringContainsString('abgeglichen', $this->json($res)['data']['content']);
+        foreach ($res->after as $fn) {
+            $fn();
+        }
+        $this->assertSame(2, (int) Db::val('SELECT COUNT(*) FROM org_allowed_members'));
+        $edit = array_values(array_filter($this->calls, fn ($c) => $c[0] === 'PATCH'));
+        $this->assertCount(1, $edit);
+        $this->assertStringContainsString('/webhooks/600000000000000001/tok/messages/@original', $edit[0][1]);
+        $this->assertStringContainsString('2 Mitglieder', $edit[0][2]);
+    }
+
+    public function testSyncAllContinuesAfterOneOrgFails(): void
+    {
+        $a = new_id();
+        $b = new_id();
+        Db::insert('organizations', ['id' => $a, 'slug' => 'a', 'name' => 'A', 'discord_guild_id' => self::GUILD, 'member_role_ids' => self::ROLE_USE, 'created_by_id' => 'x']);
+        Db::insert('organizations', ['id' => $b, 'slug' => 'b', 'name' => 'B', 'discord_guild_id' => '900000000000000002', 'member_role_ids' => self::ROLE_USE, 'created_by_id' => 'x']);
+        $calls = 0;
+        Client::fake(function (string $m, string $url) use (&$calls): array {
+            $calls++;
+            return $calls === 1
+                ? ['status' => 403, 'body' => '{}', 'headers' => []]
+                : ['status' => 200, 'body' => json_encode($this->members), 'headers' => []];
+        });
+        $out = Onboarding::syncAll();
+        $this->assertStringStartsWith('Fehler', $out['a']);
+        $this->assertStringContainsString('auf der Liste', $out['b']);
+    }
+
+    // --- Anmelde-Sperre ----------------------------------------------------------------------
+
+    public function testGateIsOffByDefault(): void
+    {
+        $this->assertTrue(Onboarding::mayLogin('irgendwer'));
+        $this->assertTrue(Onboarding::mayLogin(null));
+    }
+
+    public function testGateAllowsOnlyListedMembersAndServerAdmins(): void
+    {
+        Env::set('LOGIN_REQUIRES_ALLOWLIST', '1');
+        Env::set('SERVER_ADMIN_DISCORD_ID', '111');
+        $org = new_id();
+        Db::insert('organizations', ['id' => $org, 'slug' => 'a', 'name' => 'A', 'discord_guild_id' => 'g', 'created_by_id' => 'x']);
+        Db::insert('org_allowed_members', ['org_id' => $org, 'discord_id' => '222']);
+        $this->assertTrue(Onboarding::mayLogin('222'));
+        $this->assertTrue(Onboarding::mayLogin('111'));
+        $this->assertFalse(Onboarding::mayLogin('333'));
+        $this->assertFalse(Onboarding::mayLogin(null));
+    }
+
+    public function testRunningSessionEndsWhenRemovedFromList(): void
+    {
+        Env::set('LOGIN_REQUIRES_ALLOWLIST', '1');
+        $org = new_id();
+        Db::insert('organizations', ['id' => $org, 'slug' => 'a', 'name' => 'A', 'discord_guild_id' => 'g', 'created_by_id' => 'x']);
+        $user = $this->mkUser(['membership_checked_at' => \Hangar\Time::nowDb(), 'membership_status' => 'OK']);
+        Db::insert('org_allowed_members', ['org_id' => $org, 'discord_id' => $user['discord_id']]);
+        $s = Auth::createSession($user['id']);
+        $req = new Request('GET', '/hangar', [], [], [], [Auth::COOKIE => $s['token']]);
+        $this->assertSame(200, App::handle($req)->status);
+
+        Db::run('DELETE FROM org_allowed_members');
+        Auth::reset();
+        $res = App::handle($req);
+        $this->assertSame(303, $res->status);
+        $this->assertSame('/login', $res->headers['Location']);
+    }
+
+    public function testLoginCallbackRejectsUnlistedAccount(): void
+    {
+        Env::set('LOGIN_REQUIRES_ALLOWLIST', '1');
+        $fake = new FakeDiscord();
+        $fake->install();
+        $req = new Request('GET', '/api/auth/callback/discord', ['state' => 's', 'code' => 'c'], [], [], [Auth::STATE_COOKIE => 's']);
+        $res = App::handle($req);
+        $this->assertSame('/login?error=allowlist', $res->headers['Location']);
+        $this->assertSame(0, (int) Db::val('SELECT COUNT(*) FROM users'));
+    }
+
+    // --- Verwaltung im Web -------------------------------------------------------------------
+
+    public function testOrgAdminSeesListAndCanSyncButMembersCannot(): void
+    {
+        $org = new_id();
+        Db::insert('organizations', ['id' => $org, 'slug' => 'zeta', 'name' => 'Zeta', 'discord_guild_id' => self::GUILD, 'member_role_ids' => self::ROLE_USE, 'created_by_id' => 'x']);
+        $admin = $this->mkUser(['membership_checked_at' => \Hangar\Time::nowDb(), 'membership_status' => 'OK']);
+        $member = $this->mkUser(['membership_checked_at' => \Hangar\Time::nowDb(), 'membership_status' => 'OK']);
+        Db::insert('org_memberships', ['user_id' => $admin['id'], 'org_id' => $org, 'role' => 'ADMIN', 'can_plan' => 1]);
+        Db::insert('org_memberships', ['user_id' => $member['id'], 'org_id' => $org, 'role' => 'MEMBER', 'can_plan' => 0]);
+        $as = function (array $u) {
+            $s = Auth::createSession($u['id']);
+            $csrf = (string) Db::val('SELECT csrf_token FROM sessions WHERE token_hash = ?', [hash('sha256', $s['token'])]);
+            return [[Auth::COOKIE => $s['token']], $csrf];
+        };
+
+        [$cookies, $csrf] = $as($admin);
+        Auth::reset();
+        $page = App::handle(new Request('GET', '/o/zeta/settings', [], [], [], $cookies));
+        $this->assertSame(200, $page->status);
+        $this->assertStringContainsString('Zugangsliste', $page->body);
+        $this->assertStringContainsString('Mitglieder jetzt abgleichen', $page->body);
+
+        Auth::reset();
+        $res = App::handle(new Request('POST', '/orgs/sync-allowlist', [], ['_csrf' => $csrf, 'orgId' => $org], [], $cookies));
+        $this->assertSame(303, $res->status);
+        $this->assertSame(2, (int) Db::val('SELECT COUNT(*) FROM org_allowed_members WHERE org_id = ?', [$org]));
+        Auth::reset();
+        $after = App::handle(new Request('GET', '/o/zeta/settings', [], [], [], $cookies));
+        $this->assertSame(200, $after->status);
+        $this->assertStringContainsString('Letzter Abgleich', $after->body);
+        $this->assertStringContainsString('2 Personen auf der Liste', $after->body);
+
+        [$mCookies, $mCsrf] = $as($member);
+        Auth::reset();
+        App::handle(new Request('POST', '/orgs/sync-allowlist', [], ['_csrf' => $mCsrf, 'orgId' => $org], [], $mCookies));
+        $this->assertSame(2, (int) Db::val('SELECT COUNT(*) FROM org_allowed_members WHERE org_id = ?', [$org]));
+        Auth::reset();
+        $this->assertSame(404, App::handle(new Request('GET', '/o/zeta/settings', [], [], [], $mCookies))->status);
+    }
+}
