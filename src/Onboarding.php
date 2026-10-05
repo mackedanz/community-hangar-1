@@ -35,6 +35,10 @@ final class Onboarding
      */
     public static function ensureOrg(string $guildId, string $invokerId, string $invokerName): array
     {
+        $allowed = Config::onboardingGuildIds();
+        if ($allowed !== [] && !in_array($guildId, $allowed, true)) {
+            throw new OrgError("Dieser Server ist nicht freigeschaltet. Bitte den Betreiber, die Server-ID $guildId freizugeben.");
+        }
         $org = Db::one('SELECT * FROM organizations WHERE discord_guild_id = ?', [$guildId]);
         if ($org === null) {
             if (Db::val('SELECT 1 FROM banned_guilds WHERE discord_guild_id = ?', [$guildId]) !== null) {

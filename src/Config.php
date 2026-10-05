@@ -33,6 +33,12 @@ final class Config
         return rtrim(Env::get('IMAGE_DIR', dirname(__DIR__) . '/storage/images') ?? '', '/\\');
     }
 
+    /** Server (Discord-IDs, kommagetrennt), für die der Bot Orgas einrichten darf. Leer = jeder Server. @return list<string> */
+    public static function onboardingGuildIds(): array
+    {
+        return array_values(array_filter(array_map('trim', explode(',', (string) Env::get('ONBOARDING_GUILD_IDS', ''))), fn ($s) => $s !== ''));
+    }
+
     /** @return list<string> */
     public static function serverAdminIds(): array
     {

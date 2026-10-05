@@ -43,6 +43,8 @@ services:
       DISCORD_PUBLIC_KEY: ${DISCORD_PUBLIC_KEY:-}
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
       LOGIN_REQUIRES_ALLOWLIST: ${LOGIN_REQUIRES_ALLOWLIST:-0}
+      # Nur diese Discord-Server dürfen per /einrichten eine Orga anlegen (leer = jeder Server)
+      ONBOARDING_GUILD_IDS: ${ONBOARDING_GUILD_IDS:-}
       # Links zu Impressum/Datenschutz des Betreibers (optional)
       LEGAL_IMPRINT_URL: ${LEGAL_IMPRINT_URL:-}
       LEGAL_PRIVACY_URL: ${LEGAL_PRIVACY_URL:-}

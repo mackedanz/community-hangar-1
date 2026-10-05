@@ -374,4 +374,24 @@ final class OnboardingTest extends DbTestCase
         Auth::reset();
         $this->assertSame(404, App::handle(new Request('GET', '/o/zeta/settings', [], [], [], $mCookies))->status);
     }
+
+    public function testOnlyListedGuildsMayBeSetUpWhenRestricted(): void
+    {
+        Env::set('ONBOARDING_GUILD_IDS', '900000000000000009, 900000000000000010');
+        $res = $this->json($this->post($this->command()));
+        $this->assertStringContainsString('nicht freigeschaltet', $res['data']['content']);
+        $this->assertStringContainsString(self::GUILD, $res['data']['content']);
+        $this->assertSame(0, (int) Db::val('SELECT COUNT(*) FROM organizations'));
+        $this->assertSame(0, (int) Db::val('SELECT COUNT(*) FROM org_allowed_members'));
+
+        Env::set('ONBOARDING_GUILD_IDS', '900000000000000009,' . self::GUILD);
+        $this->post($this->command());
+        $this->assertSame(1, (int) Db::val('SELECT COUNT(*) FROM organizations'));
+    }
+
+    public function testNoRestrictionMeansEveryGuildMaySetUp(): void
+    {
+        $this->post($this->command());
+        $this->assertSame(1, (int) Db::val('SELECT COUNT(*) FROM organizations'));
+    }
 }
