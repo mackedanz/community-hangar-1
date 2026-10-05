@@ -15,14 +15,13 @@ FROM composer:2 AS vendor
 WORKDIR /app
 COPY composer.json composer.lock ./
 COPY src ./src
-RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts
+RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts --ignore-platform-reqs
 
 # --- 3. Laufzeit ----------------------------------------------------------------------------
 FROM php:8.3-apache
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libicu-dev \
  && docker-php-ext-install -j"$(nproc)" intl pdo_mysql opcache \
- && apt-get purge -y --auto-remove \
  && rm -rf /var/lib/apt/lists/* \
  && a2enmod headers
 
