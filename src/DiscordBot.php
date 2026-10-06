@@ -22,6 +22,10 @@ final class DiscordBot
         if ($key === null || $signature === null || $timestamp === null) {
             return false;
         }
+        // Veraltete Anfragen ablehnen (Schutz vor erneutem Senden abgefangener Anfragen)
+        if (!ctype_digit($timestamp) || abs(time() - (int) $timestamp) > 300) {
+            return false;
+        }
         if (!ctype_xdigit($signature) || strlen($signature) !== 128 || !ctype_xdigit($key) || strlen($key) !== 64) {
             return false;
         }

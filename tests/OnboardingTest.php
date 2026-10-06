@@ -306,6 +306,82 @@ final class OnboardingTest extends DbTestCase
         $this->assertSame($other, Db::val('SELECT id FROM users WHERE id = ?', [$other]));
     }
 
+    public function testStaleSignedRequestIsRejected(): void
+    {
+        $body = '{"type":1}';
+        $old = (string) (time() - 600);
+        $sig = bin2hex(sodium_crypto_sign_detached($old . $body, $this->secretKey));
+        $res = App::handle(new Request('POST', '/discord/interactions', [], [], [
+            'x-signature-ed25519' => $sig, 'x-signature-timestamp' => $old,
+        ], [], $body));
+        $this->assertSame(401, $res->status);
+        $future = (string) (time() + 600);
+        $sig = bin2hex(sodium_crypto_sign_detached($future . $body, $this->secretKey));
+        $res = App::handle(new Request('POST', '/discord/interactions', [], [], [
+            'x-signature-ed25519' => $sig, 'x-signature-timestamp' => $future,
+        ], [], $body));
+        $this->assertSame(401, $res->status);
+    }
+
+    /** @param list<string> $ids */
+    private function putOnList(string $orgId, array $ids): void
+    {
+        foreach ($ids as $id) {
+            $this->accountFor($id);
+            Db::run('INSERT INTO org_allowed_members (org_id, discord_id, name, synced_at) VALUES (?,?,?,?)', [$orgId, $id, 'P' . $id, Time::nowDb()]);
+        }
+    }
+
+    public function testBrakeSkipsDeletionWhenMostOfTheListLeavesAtOnce(): void
+    {
+        Env::set('LOGIN_REQUIRES_ALLOWLIST', '1');
+        $orgId = $this->setUpOrgWithUseRole();
+        $ids = ['710000000000000001', '710000000000000002', '710000000000000003', '710000000000000004', '710000000000000005', '710000000000000006'];
+        $this->putOnList($orgId, $ids);
+        $this->members = [$this->member('700000000000000003', 'Planer', [self::ROLE_USE])]; // alle sechs weg
+        $r = Onboarding::syncAllowlist($orgId);
+        $this->assertSame(0, $r['deleted']);
+        $this->assertSame(6, $r['skipped']);
+        $this->assertSame(6, (int) Db::val("SELECT COUNT(*) FROM accounts WHERE provider_account_id LIKE '71%'"));
+        $this->assertStringContainsString('NICHT gelöscht', Onboarding::deletionNote($r));
+        // von der Liste sind sie trotzdem gestrichen
+        $this->assertSame(0, (int) Db::val("SELECT COUNT(*) FROM org_allowed_members WHERE discord_id LIKE '71%'"));
+    }
+
+    public function testBrakeDoesNotApplyToSmallDepartures(): void
+    {
+        Env::set('LOGIN_REQUIRES_ALLOWLIST', '1');
+        $orgId = $this->setUpOrgWithUseRole();
+        $this->putOnList($orgId, ['710000000000000001', '710000000000000002', '710000000000000003', '710000000000000004']);
+        $this->members = [$this->member('700000000000000003', 'Planer', [self::ROLE_USE])];
+        $r = Onboarding::syncAllowlist($orgId);
+        $this->assertSame(4, $r['deleted']);
+        $this->assertSame(0, $r['skipped']);
+    }
+
+    public function testPurgeDeletesAccountsWithoutListAfterTheBrake(): void
+    {
+        Env::set('LOGIN_REQUIRES_ALLOWLIST', '1');
+        Env::set('SERVER_ADMIN_DISCORD_ID', '710000000000000009');
+        $orgId = $this->setUpOrgWithUseRole();
+        $this->accountFor('710000000000000001');
+        $this->accountFor('710000000000000009'); // Server-Admin
+        $this->putOnList($orgId, ['710000000000000002']);
+        $dry = Onboarding::purgeFormerMembers(true);
+        $this->assertCount(1, $dry);
+        $this->assertSame(2, (int) Db::val("SELECT COUNT(*) FROM accounts WHERE provider_account_id IN ('710000000000000001','710000000000000002')"));
+        $this->assertCount(1, Onboarding::purgeFormerMembers(false));
+        $this->assertNull(Db::val("SELECT 1 FROM accounts WHERE provider_account_id = '710000000000000001'"));
+        $this->assertNotNull(Db::val("SELECT 1 FROM accounts WHERE provider_account_id = '710000000000000009'"));
+        $this->assertNotNull(Db::val("SELECT 1 FROM accounts WHERE provider_account_id = '710000000000000002'"));
+    }
+
+    public function testPurgeNeedsTheGate(): void
+    {
+        $this->expectException(OrgError::class);
+        Onboarding::purgeFormerMembers(true);
+    }
+
     public function testSyncNeedsAtLeastOneUseRole(): void
     {
         $this->post($this->command());

@@ -114,7 +114,7 @@ final class DiscordController extends Controller
         $res->afterSend(static function () use ($orgId, $token): void {
             try {
                 $r = Onboarding::syncAllowlist($orgId);
-                $note = "Fertig: {$r['total']} Mitglieder dürfen sich anmelden (+{$r['added']}, −{$r['removed']})" . ($r['deleted'] > 0 ? ", {$r['deleted']} Konten gelöscht" : '') . '.';
+                $note = "Fertig: {$r['total']} Mitglieder dürfen sich anmelden (+{$r['added']}, −{$r['removed']})" . Onboarding::deletionNote($r) . '.';
             } catch (OrgError | DiscordAuthError | DiscordUnavailableError $e) {
                 $note = 'Abgleich nicht möglich: ' . $e->getMessage();
             }
@@ -153,7 +153,7 @@ final class DiscordController extends Controller
             $res->afterSend(static function () use ($orgId, $token): void {
                 try {
                     $r = Onboarding::syncAllowlist($orgId);
-                    $note = "Fertig: {$r['total']} Mitglieder dürfen sich anmelden (+{$r['added']}, −{$r['removed']})" . ($r['deleted'] > 0 ? ", {$r['deleted']} Konten gelöscht" : '') . '.';
+                    $note = "Fertig: {$r['total']} Mitglieder dürfen sich anmelden (+{$r['added']}, −{$r['removed']})" . Onboarding::deletionNote($r) . '.';
                 } catch (OrgError | DiscordAuthError | DiscordUnavailableError $e) {
                     $note = 'Abgleich nicht möglich: ' . $e->getMessage();
                 }

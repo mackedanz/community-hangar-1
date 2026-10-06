@@ -241,7 +241,8 @@ Entferne dort das <code>#</code>, sonst werden sie ignoriert.</p>
 Werte stehen direkt hinter dem <code>=</code>, <b>ohne Leerzeichen und ohne Anführungszeichen</b>. Speichern mit <kbd>Strg</kbd>+<kbd>O</kbd> und Enter, beenden mit <kbd>Strg</kbd>+<kbd>X</kbd>.</p>
 <figure><img src="bilder/s45.jpg" alt="Die ausgefüllte Datei (Geheimnisse und Kennungen sind hier geschwärzt)."><figcaption>Die ausgefüllte Datei (Geheimnisse und Kennungen sind hier geschwärzt).</figcaption></figure>
 <div class="warn"><b>Wichtig:</b> Mit <code>LOGIN_REQUIRES_ALLOWLIST=1</code> löscht jeder Abgleich der Mitgliederliste das Konto samt Hangar von allen,
-die nicht mehr auf einer Zugangsliste stehen. Du selbst bist über <code>SERVER_ADMIN_DISCORD_ID</code> immer ausgenommen. Mit <code>0</code> ist die Sperre aus.</div>
+die nicht mehr auf einer Zugangsliste stehen. Du selbst bist über <code>SERVER_ADMIN_DISCORD_ID</code> immer ausgenommen. Mit <code>0</code> ist die Sperre aus.
+Als Bremse löscht ein Abgleich nichts, wenn auf einmal mindestens 5 Personen und mehr als die Hälfte der Liste wegfallen (die Meldung nennt das). Dann prüfst du die Liste und löschst bei Bedarf mit <code>bin/purge-former-members.php --yes</code>.</div>
 <h3>Dateirechte setzen und prüfen</h3>
 <p>Danach darf nur noch der Besitzer die Datei lesen. Der Befehl gibt bei Erfolg nichts aus.</p>
 <pre class="file">chmod 600 .env</pre>
@@ -362,6 +363,7 @@ Damit prüft die App, zu welcher Orga du gehörst. Scrolle nach unten, bis „Au
   <tr><td>Logs ansehen</td><td><code>docker compose logs -f app</code></td></tr>
   <tr><td>Katalog sofort abgleichen</td><td><code>docker compose exec app php bin/catalog-sync.php</code></td></tr>
   <tr><td>Zugangslisten sofort abgleichen</td><td><code>docker compose exec app php bin/sync-allowlist.php</code></td></tr>
+  <tr><td>Konten ohne Zugangsliste löschen (Vorschau, mit <code>--yes</code> wirklich)</td><td><code>docker compose exec app php bin/purge-former-members.php</code></td></tr>
   <tr><td>Schiffsbilder vorab laden</td><td><code>docker compose exec app php bin/warm-images.php</code></td></tr>
   <tr><td>Datenbank sichern</td><td><code>docker compose exec db sh -c 'mariadb-dump -u hangar -p"$MARIADB_PASSWORD" hangar' &gt; sicherung.sql</code></td></tr>
   <tr><td>Stoppen (Daten bleiben)</td><td><code>docker compose down</code></td></tr>

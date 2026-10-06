@@ -11,6 +11,9 @@ namespace Hangar;
  */
 final class Onboarding
 {
+    /** Ab so vielen Abgängen auf einmal (und mehr als der Hälfte der Liste) wird beim Abgleich nichts gelöscht. */
+    public const DELETE_BRAKE_MIN = 5;
+
     public static function gateEnabled(): bool
     {
         return in_array(strtolower((string) Env::get('LOGIN_REQUIRES_ALLOWLIST', '')), ['1', 'true', 'yes', 'on'], true);
@@ -99,7 +102,7 @@ final class Onboarding
      * Ohne gewählte Rolle passiert nichts (sonst stünde der ganze Server auf der Liste).
      * Wer dadurch auf keiner Zugangsliste mehr steht, verliert sein Konto samt Hangar (nur bei eingeschalteter
      * Anmelde-Sperre). Kommt die Person zurück, legt der nächste Login ein neues Konto an; ein Sync füllt den Hangar.
-     * @return array{total:int,added:int,removed:int,deleted:int}
+     * @return array{total:int,added:int,removed:int,deleted:int,skipped:int}
      */
     public static function syncAllowlist(string $orgId): array
     {
@@ -131,12 +134,80 @@ final class Onboarding
             )->rowCount();
             Db::run('UPDATE organizations SET allowlist_synced_at = ? WHERE id = ?', [$now, $orgId]);
             $total = (int) Db::val('SELECT COUNT(*) FROM org_allowed_members WHERE org_id = ?', [$orgId]);
-            return ['total' => $total, 'added' => count(array_diff($ids, $before)), 'removed' => $removed, 'gone' => array_values(array_diff($before, $ids, $fixed))];
+            return ['total' => $total, 'added' => count(array_diff($ids, $before)), 'removed' => $removed, 'before' => count($before), 'gone' => array_values(array_diff($before, $ids, $fixed))];
         });
+        $gone = $result['gone'];
+        $before = $result['before'];
+        unset($result['gone'], $result['before']);
+        $deleted = 0;
+        $skipped = 0;
         // Eine leere Mitgliederliste ist verdächtig (Discord-Panne?): dann wird nichts gelöscht.
-        $deleted = $members === [] ? 0 : self::deleteFormerMembers($result['gone']);
-        unset($result['gone']);
-        return $result + ['deleted' => $deleted];
+        if ($members !== [] && self::gateEnabled()) {
+            if (count($gone) >= self::DELETE_BRAKE_MIN && count($gone) * 2 > $before) {
+                // Sicherheitsbremse: so viele auf einmal sehen nach einem Rollenumbau oder Fehler aus, nicht nach Abgängen.
+                $skipped = count(self::formerMemberUserIds($gone));
+            } else {
+                $deleted = self::deleteFormerMembers($gone);
+            }
+        }
+        return $result + ['deleted' => $deleted, 'skipped' => $skipped];
+    }
+
+    /** Kurztext zum Löschen für Meldungen (leer, wenn nichts gelöscht oder übersprungen wurde). @param array{deleted:int,skipped:int} $r */
+    public static function deletionNote(array $r): string
+    {
+        $out = $r['deleted'] > 0 ? ", {$r['deleted']} Konten gelöscht" : '';
+        if ($r['skipped'] > 0) {
+            $out .= ", {$r['skipped']} Konten NICHT gelöscht (Sicherheitsbremse: zu viele auf einmal; prüfen und dann auf dem Server bin/purge-former-members.php ausführen)";
+        }
+        return $out;
+    }
+
+    /**
+     * Konten (Benutzer-IDs) von Personen, die auf keiner Zugangsliste mehr stehen. Server-Admins sind ausgenommen.
+     * @param list<string> $discordIds @return list<string>
+     */
+    private static function formerMemberUserIds(array $discordIds): array
+    {
+        $out = [];
+        foreach ($discordIds as $discordId) {
+            if (in_array($discordId, Config::serverAdminIds(), true)
+                || Db::val('SELECT 1 FROM org_allowed_members WHERE discord_id = ? LIMIT 1', [$discordId]) !== null) {
+                continue;
+            }
+            $userId = Db::val("SELECT user_id FROM accounts WHERE provider = 'discord' AND provider_account_id = ?", [$discordId]);
+            if ($userId !== null) {
+                $out[] = (string) $userId;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Löscht alle Konten, deren Discord-ID auf keiner Zugangsliste steht (Server-Admins ausgenommen). Gedacht für den
+     * ausdrücklichen Aufruf (bin/purge-former-members.php), etwa nachdem die Sicherheitsbremse beim Abgleich gegriffen hat.
+     * @return list<string> Namen der betroffenen Konten
+     */
+    public static function purgeFormerMembers(bool $dryRun): array
+    {
+        if (!self::gateEnabled()) {
+            throw new OrgError('Die Anmeldesperre (LOGIN_REQUIRES_ALLOWLIST) ist aus; ohne sie gibt es keine „ehemaligen“ Mitglieder.');
+        }
+        $names = [];
+        $rows = Db::all(
+            "SELECT a.user_id, a.provider_account_id AS discord_id, u.name FROM accounts a JOIN users u ON u.id = a.user_id
+             WHERE a.provider = 'discord' AND a.provider_account_id NOT IN (SELECT discord_id FROM org_allowed_members)",
+        );
+        foreach ($rows as $r) {
+            if (in_array($r['discord_id'], Config::serverAdminIds(), true)) {
+                continue;
+            }
+            $names[] = (string) ($r['name'] ?? $r['discord_id']);
+            if (!$dryRun) {
+                Db::run('DELETE FROM users WHERE id = ?', [$r['user_id']]);
+            }
+        }
+        return $names;
     }
 
     /**
@@ -149,15 +220,8 @@ final class Onboarding
             return 0;
         }
         $deleted = 0;
-        foreach ($discordIds as $discordId) {
-            if (in_array($discordId, Config::serverAdminIds(), true)
-                || Db::val('SELECT 1 FROM org_allowed_members WHERE discord_id = ? LIMIT 1', [$discordId]) !== null) {
-                continue;
-            }
-            $userId = Db::val("SELECT user_id FROM accounts WHERE provider = 'discord' AND provider_account_id = ?", [$discordId]);
-            if ($userId !== null) {
-                $deleted += Db::run('DELETE FROM users WHERE id = ?', [$userId])->rowCount();
-            }
+        foreach (self::formerMemberUserIds($discordIds) as $userId) {
+            $deleted += Db::run('DELETE FROM users WHERE id = ?', [$userId])->rowCount();
         }
         return $deleted;
     }
@@ -169,7 +233,7 @@ final class Onboarding
         foreach (Db::all('SELECT id, slug FROM organizations WHERE member_role_ids IS NOT NULL ORDER BY slug') as $o) {
             try {
                 $r = self::syncAllowlist($o['id']);
-                $out[$o['slug']] = "{$r['total']} auf der Liste (+{$r['added']}, -{$r['removed']})" . ($r['deleted'] > 0 ? ", {$r['deleted']} Konten gelöscht" : '');
+                $out[$o['slug']] = "{$r['total']} auf der Liste (+{$r['added']}, -{$r['removed']})" . self::deletionNote($r);
             } catch (OrgError | DiscordAuthError | DiscordUnavailableError $e) {
                 $out[$o['slug']] = 'Fehler: ' . $e->getMessage();
             }
