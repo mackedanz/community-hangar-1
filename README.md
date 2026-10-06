@@ -79,7 +79,8 @@ Dauerprozess). Server-ID und aufrufende Person kommen aus der signierten Interak
 2. Bot mit Scope `applications.commands` + `bot` auf den Server einladen (keine Nachrichtenrechte nötig), dann `php bin/register-commands.php`.
 3. `/einrichten` im Discord: legt die Orga an, zwei Rollenauswahlen (nutzen / planen, je bis 10), Abgleich schreibt Discord-ID,
    Name und Avatar aller Rolleninhaber in `org_allowed_members`. Danach stündlich (`bin/sync-allowlist.php`) und per Knopf in den Orga-Einstellungen.
-4. `LOGIN_REQUIRES_ALLOWLIST=1`: nur wer auf einer Zugangsliste steht (oder `SERVER_ADMIN_DISCORD_ID`) kann sich anmelden; Streichen von der Liste beendet laufende Sitzungen sofort.
+   Zusätzlich `/abgleichen`: gleicht sofort ab, darf jede Person mit einer Nutzungs-Rolle der Orga (und Server-Admins); legt nie eine Orga an. Nach dem Update einmal `php bin/register-commands.php` ausführen.
+4. `LOGIN_REQUIRES_ALLOWLIST=1`: Wer beim Abgleich auf keiner Zugangsliste mehr steht, dessen Konto wird samt Hangar sofort gelöscht (nicht: Server-Admins, fest eingetragene Personen, leere Mitgliederliste von Discord). Nur wer auf einer Zugangsliste steht (oder `SERVER_ADMIN_DISCORD_ID`) kann sich anmelden; Streichen von der Liste beendet laufende Sitzungen sofort.
    Erst einschalten, wenn die Liste gefüllt ist.
 
 Lokal lässt sich der Endpunkt nur mit einem Tunnel von Discord aus erreichen; die Logik ist mit gefälschten Interaktionen getestet (`tests/OnboardingTest.php`).

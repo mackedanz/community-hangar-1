@@ -62,7 +62,7 @@
   </p>
 
   <h2 class="text-lg font-semibold text-zinc-100">Löschung</h2>
-  <p>In den Einstellungen kannst du dein Konto samt aller Daten jederzeit unwiderruflich löschen.</p>
+  <p>In den Einstellungen kannst du dein Konto samt aller Daten jederzeit unwiderruflich löschen. Verlässt du den Discord-Server deiner Orga oder verlierst die Rolle, die den Zugang erlaubt, wird dein Konto samt Hangar beim nächsten Abgleich der Mitgliederliste (spätestens nach einer Stunde) automatisch gelöscht.</p>
 
   <p class="text-zinc-500">
     Star Citizen® und Roberts Space Industries® sind Marken von Cloud Imperium Games. Diese

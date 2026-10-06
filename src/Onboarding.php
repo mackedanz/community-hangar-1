@@ -97,7 +97,9 @@ final class Onboarding
     /**
      * Gleicht die Zugangsliste mit Discord ab: wer eine Nutzungs- oder Planer-Rolle hat, steht drin.
      * Ohne gewählte Rolle passiert nichts (sonst stünde der ganze Server auf der Liste).
-     * @return array{total:int,added:int,removed:int}
+     * Wer dadurch auf keiner Zugangsliste mehr steht, verliert sein Konto samt Hangar (nur bei eingeschalteter
+     * Anmelde-Sperre). Kommt die Person zurück, legt der nächste Login ein neues Konto an; ein Sync füllt den Hangar.
+     * @return array{total:int,added:int,removed:int,deleted:int}
      */
     public static function syncAllowlist(string $orgId): array
     {
@@ -112,8 +114,9 @@ final class Onboarding
             static fn (array $m): bool => array_intersect($wanted, $m['roles']) !== [],
         ));
         $now = Time::nowDb();
-        return Db::transaction(function () use ($orgId, $members, $now): array {
+        $result = Db::transaction(function () use ($orgId, $members, $now): array {
             $before = array_column(Db::all('SELECT discord_id FROM org_allowed_members WHERE org_id = ?', [$orgId]), 'discord_id');
+            $fixed = array_column(Db::all('SELECT discord_id FROM org_allowed_members WHERE org_id = ? AND fixed = 1', [$orgId]), 'discord_id');
             foreach ($members as $m) {
                 Db::run(
                     'INSERT INTO org_allowed_members (org_id, discord_id, name, avatar_url, synced_at) VALUES (?,?,?,?,?)
@@ -128,8 +131,35 @@ final class Onboarding
             )->rowCount();
             Db::run('UPDATE organizations SET allowlist_synced_at = ? WHERE id = ?', [$now, $orgId]);
             $total = (int) Db::val('SELECT COUNT(*) FROM org_allowed_members WHERE org_id = ?', [$orgId]);
-            return ['total' => $total, 'added' => count(array_diff($ids, $before)), 'removed' => $removed];
+            return ['total' => $total, 'added' => count(array_diff($ids, $before)), 'removed' => $removed, 'gone' => array_values(array_diff($before, $ids, $fixed))];
         });
+        // Eine leere Mitgliederliste ist verdächtig (Discord-Panne?): dann wird nichts gelöscht.
+        $deleted = $members === [] ? 0 : self::deleteFormerMembers($result['gone']);
+        unset($result['gone']);
+        return $result + ['deleted' => $deleted];
+    }
+
+    /**
+     * Löscht die Konten von Personen, die auf keiner Zugangsliste mehr stehen (Server-Admins ausgenommen).
+     * @param list<string> $discordIds @return int Anzahl gelöschter Konten
+     */
+    private static function deleteFormerMembers(array $discordIds): int
+    {
+        if (!self::gateEnabled()) {
+            return 0;
+        }
+        $deleted = 0;
+        foreach ($discordIds as $discordId) {
+            if (in_array($discordId, Config::serverAdminIds(), true)
+                || Db::val('SELECT 1 FROM org_allowed_members WHERE discord_id = ? LIMIT 1', [$discordId]) !== null) {
+                continue;
+            }
+            $userId = Db::val("SELECT user_id FROM accounts WHERE provider = 'discord' AND provider_account_id = ?", [$discordId]);
+            if ($userId !== null) {
+                $deleted += Db::run('DELETE FROM users WHERE id = ?', [$userId])->rowCount();
+            }
+        }
+        return $deleted;
     }
 
     /** Alle Orgas abgleichen (Cron). Fehler einer Orga stoppen die anderen nicht. @return array<string,string> Orga-Slug => Ergebnis */
@@ -139,7 +169,7 @@ final class Onboarding
         foreach (Db::all('SELECT id, slug FROM organizations WHERE member_role_ids IS NOT NULL ORDER BY slug') as $o) {
             try {
                 $r = self::syncAllowlist($o['id']);
-                $out[$o['slug']] = "{$r['total']} auf der Liste (+{$r['added']}, -{$r['removed']})";
+                $out[$o['slug']] = "{$r['total']} auf der Liste (+{$r['added']}, -{$r['removed']})" . ($r['deleted'] > 0 ? ", {$r['deleted']} Konten gelöscht" : '');
             } catch (OrgError | DiscordAuthError | DiscordUnavailableError $e) {
                 $out[$o['slug']] = 'Fehler: ' . $e->getMessage();
             }

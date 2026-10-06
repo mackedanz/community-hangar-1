@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Hangar\Controllers;
 
+use Hangar\Config;
+use Hangar\Db;
 use Hangar\Discord;
 use Hangar\DiscordAuthError;
 use Hangar\DiscordBot;
@@ -13,6 +15,7 @@ use Hangar\Http\Response;
 use Hangar\OrgError;
 use Hangar\Orgs;
 use Hangar\Onboarding;
+use Hangar\Time;
 
 /**
  * POST /discord/interactions: Endpunkt für die Slash-Befehle des Onboarding-Bots (kein Dauerprozess nötig).
@@ -25,6 +28,9 @@ final class DiscordController extends Controller
     private const COMMAND = 2;
     private const COMPONENT = 3;
     private const REPLY = 4;
+    private const DEFERRED = 5;
+    /** Mindestabstand zwischen zwei Abgleichen derselben Orga per /abgleichen. */
+    private const SYNC_COOLDOWN_SECONDS = 30;
     private const UPDATE = 7;
     private const EPHEMERAL = 64;
 
@@ -50,6 +56,9 @@ final class DiscordController extends Controller
         if ($guildId === '' || !is_array($user) || empty($user['id'])) {
             return self::say('Dieser Befehl funktioniert nur auf einem Discord-Server.');
         }
+        if ($type === self::COMMAND && ($i['data']['name'] ?? '') === 'abgleichen') {
+            return self::syncCommand($guildId, $i);
+        }
         // Discord liefert die Rechte der aufrufenden Person in der Interaktion mit (Owner eingeschlossen).
         if (!Discord::isGuildAdmin(['permissions' => $i['member']['permissions'] ?? '0'])) {
             return self::say('Das dürfen nur Server-Admins (Administrator oder „Server verwalten“).');
@@ -68,6 +77,50 @@ final class DiscordController extends Controller
         } catch (DiscordAuthError | DiscordUnavailableError $e) {
             return self::say($e->getMessage());
         }
+    }
+
+    /**
+     * /abgleichen: gleicht die Zugangsliste mit den Discord-Rollen ab. Dürfen: Server-Admins und alle mit einer
+     * Nutzungs-Rolle der Orga. Legt nie eine Orga an (das geht nur über /einrichten).
+     * @param array<string,mixed> $i
+     */
+    private static function syncCommand(string $guildId, array $i): Response
+    {
+        $org = Db::one('SELECT * FROM organizations WHERE discord_guild_id = ?', [$guildId]);
+        if ($org === null) {
+            return self::say('Für diesen Server ist noch keine Orga eingerichtet. Das erledigt ein Server-Admin mit /einrichten.');
+        }
+        $allowedGuilds = Config::onboardingGuildIds();
+        if ($allowedGuilds !== [] && !in_array($guildId, $allowedGuilds, true)) {
+            return self::say('Dieser Server ist nicht freigeschaltet.');
+        }
+        $roles = array_map('strval', (array) ($i['member']['roles'] ?? []));
+        $mayUse = array_intersect(Orgs::parseRoleIds($org['member_role_ids']), $roles) !== [];
+        if (!$mayUse && !Discord::isGuildAdmin(['permissions' => $i['member']['permissions'] ?? '0'])) {
+            return self::say('Das dürfen nur Mitglieder mit einer Nutzungs-Rolle der Orga und Server-Admins.');
+        }
+        $last = Time::parse($org['allowlist_synced_at'] ?? null);
+        if ($last !== null && Time::now()->getTimestamp() - $last->getTimestamp() < self::SYNC_COOLDOWN_SECONDS) {
+            return self::say('Die Mitglieder wurden gerade erst abgeglichen. Bitte warte kurz.');
+        }
+        if (Orgs::parseRoleIds($org['member_role_ids']) === []) {
+            return self::say('Es ist noch keine Rolle gewählt, die das Tool nutzen darf. Das erledigt ein Server-Admin mit /einrichten.');
+        }
+
+        $orgId = (string) $org['id'];
+        $token = (string) ($i['token'] ?? '');
+        // Der Abgleich kann länger als die 3 Sekunden dauern, die Discord für die Antwort lässt.
+        $res = Response::json(['type' => self::DEFERRED, 'data' => ['flags' => self::EPHEMERAL]]);
+        $res->afterSend(static function () use ($orgId, $token): void {
+            try {
+                $r = Onboarding::syncAllowlist($orgId);
+                $note = "Fertig: {$r['total']} Mitglieder dürfen sich anmelden (+{$r['added']}, −{$r['removed']})" . ($r['deleted'] > 0 ? ", {$r['deleted']} Konten gelöscht" : '') . '.';
+            } catch (OrgError | DiscordAuthError | DiscordUnavailableError $e) {
+                $note = 'Abgleich nicht möglich: ' . $e->getMessage();
+            }
+            DiscordBot::editOriginal($token, ['content' => $note, 'allowed_mentions' => ['parse' => []]]);
+        });
+        return $res;
     }
 
     /** @param array<string,mixed> $org @param array<string,mixed> $i */
@@ -100,7 +153,7 @@ final class DiscordController extends Controller
             $res->afterSend(static function () use ($orgId, $token): void {
                 try {
                     $r = Onboarding::syncAllowlist($orgId);
-                    $note = "Fertig: {$r['total']} Mitglieder dürfen sich anmelden (+{$r['added']}, −{$r['removed']}).";
+                    $note = "Fertig: {$r['total']} Mitglieder dürfen sich anmelden (+{$r['added']}, −{$r['removed']})" . ($r['deleted'] > 0 ? ", {$r['deleted']} Konten gelöscht" : '') . '.';
                 } catch (OrgError | DiscordAuthError | DiscordUnavailableError $e) {
                     $note = 'Abgleich nicht möglich: ' . $e->getMessage();
                 }

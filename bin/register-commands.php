@@ -20,6 +20,12 @@ $status = Hangar\DiscordBot::registerCommands([
         'default_member_permissions' => '32', // "Server verwalten"; die App prüft die Rechte zusätzlich selbst
         'dm_permission' => false,
     ],
+    [
+        'name' => 'abgleichen',
+        'description' => 'Mitglieder mit den Discord-Rollen abgleichen: wer darf sich im Community-Hangar anmelden',
+        'type' => 1,
+        'dm_permission' => false, // für alle sichtbar; die App erlaubt es nur Mitgliedern der Orga und Server-Admins
+    ],
 ]);
 echo $status >= 200 && $status < 300 ? "Befehle registriert.\n" : "Discord antwortet mit Status $status.\n";
 exit($status >= 200 && $status < 300 ? 0 : 1);

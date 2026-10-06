@@ -12,6 +12,7 @@ use Hangar\Http\Client;
 use Hangar\Http\Request;
 use Hangar\Http\Response;
 use Hangar\Onboarding;
+use Hangar\Time;
 use Hangar\OrgError;
 
 /** Onboarding-Bot: Signaturprüfung, /einrichten, Rollenauswahl, Zugangsliste und Anmelde-Sperre. */
@@ -243,11 +244,147 @@ final class OnboardingTest extends DbTestCase
         $this->assertSame([self::ADMIN], $this->ids('org_allowed_members', 'discord_id'));
     }
 
+    private function accountFor(string $discordId): string
+    {
+        $uid = new_id();
+        Db::insert('users', ['id' => $uid, 'name' => 'U' . $discordId]);
+        Db::insert('accounts', ['id' => new_id(), 'user_id' => $uid, 'provider' => 'discord', 'provider_account_id' => $discordId]);
+        return $uid;
+    }
+
+    public function testFormerMemberAccountIsDeletedWhenGateIsOn(): void
+    {
+        Env::set('LOGIN_REQUIRES_ALLOWLIST', '1');
+        $orgId = $this->setUpOrgWithUseRole();
+        Onboarding::syncAllowlist($orgId);
+        $pilot = $this->accountFor('700000000000000002');
+        $chef = $this->accountFor(self::ADMIN);
+        $this->members = [$this->member('700000000000000003', 'Planer', [self::ROLE_USE])]; // Pilot und Chef weg
+        $r = Onboarding::syncAllowlist($orgId);
+        $this->assertSame(1, $r['deleted']);
+        $this->assertNull(Db::val('SELECT id FROM users WHERE id = ?', [$pilot]));
+        $this->assertSame($chef, Db::val('SELECT id FROM users WHERE id = ?', [$chef]), 'fest eingetragene Personen bleiben');
+        $this->assertNull(Db::val('SELECT 1 FROM accounts WHERE user_id = ?', [$pilot]));
+    }
+
+    public function testNothingIsDeletedWithoutTheGate(): void
+    {
+        $orgId = $this->setUpOrgWithUseRole();
+        Onboarding::syncAllowlist($orgId);
+        $pilot = $this->accountFor('700000000000000002');
+        $this->members = [$this->member('700000000000000003', 'Planer', [self::ROLE_USE])];
+        $this->assertSame(0, Onboarding::syncAllowlist($orgId)['deleted']);
+        $this->assertSame($pilot, Db::val('SELECT id FROM users WHERE id = ?', [$pilot]));
+    }
+
+    public function testNothingIsDeletedWhenDiscordReturnsNoMembers(): void
+    {
+        Env::set('LOGIN_REQUIRES_ALLOWLIST', '1');
+        $orgId = $this->setUpOrgWithUseRole();
+        Onboarding::syncAllowlist($orgId);
+        $pilot = $this->accountFor('700000000000000002');
+        $this->members = [];
+        $this->assertSame(0, Onboarding::syncAllowlist($orgId)['deleted']);
+        $this->assertSame($pilot, Db::val('SELECT id FROM users WHERE id = ?', [$pilot]));
+    }
+
+    public function testServerAdminAndPeopleOnAnotherListAreKept(): void
+    {
+        Env::set('LOGIN_REQUIRES_ALLOWLIST', '1');
+        Env::set('SERVER_ADMIN_DISCORD_ID', '700000000000000002');
+        $orgId = $this->setUpOrgWithUseRole();
+        Onboarding::syncAllowlist($orgId);
+        $admin = $this->accountFor('700000000000000002');
+        $other = $this->accountFor('700000000000000003');
+        Db::run("INSERT INTO organizations (id, slug, name, discord_guild_id, created_by_id) VALUES ('o2','zwei','Zwei','900000000000000002','x')");
+        Db::run("INSERT INTO org_allowed_members (org_id, discord_id, name, synced_at) VALUES ('o2','700000000000000003','Planer',?)", [Time::nowDb()]);
+        Db::run("INSERT INTO org_allowed_members (org_id, discord_id, name, synced_at) VALUES (?, '700000000000000003','Planer',?)", [$orgId, Time::nowDb()]);
+        $this->members = [$this->member('700000000000000004', 'Gast', [self::ROLE_USE])];
+        $r = Onboarding::syncAllowlist($orgId);
+        $this->assertSame(0, $r['deleted']);
+        $this->assertSame($admin, Db::val('SELECT id FROM users WHERE id = ?', [$admin]));
+        $this->assertSame($other, Db::val('SELECT id FROM users WHERE id = ?', [$other]));
+    }
+
     public function testSyncNeedsAtLeastOneUseRole(): void
     {
         $this->post($this->command());
         $this->expectException(OrgError::class);
         Onboarding::syncAllowlist((string) Db::val('SELECT id FROM organizations'));
+    }
+
+    /** @param list<string> $roles @return array<string,mixed> */
+    private function syncCommand(string $userId, array $roles, string $perms = '0'): array
+    {
+        return [
+            'type' => 2, 'token' => 'tok', 'guild_id' => self::GUILD, 'data' => ['name' => 'abgleichen'],
+            'member' => ['permissions' => $perms, 'roles' => $roles, 'user' => ['id' => $userId, 'username' => 'x', 'global_name' => 'X']],
+        ];
+    }
+
+    private function setUpOrgWithUseRole(): string
+    {
+        $this->post($this->command());
+        $orgId = (string) Db::val('SELECT id FROM organizations');
+        Onboarding::setRoles($orgId, 'use', [self::ROLE_USE], []);
+        return $orgId;
+    }
+
+    public function testMemberWithUseRoleMaySyncWithoutBeingAdmin(): void
+    {
+        $orgId = $this->setUpOrgWithUseRole();
+        $res = $this->post($this->syncCommand('700000000000000002', [self::ROLE_USE]));
+        $this->assertSame(5, $this->json($res)['type']);
+        $this->assertCount(1, $res->after);
+        foreach ($res->after as $fn) {
+            $fn();
+        }
+        $this->assertNotNull(Db::val('SELECT allowlist_synced_at FROM organizations WHERE id = ?', [$orgId]));
+        $this->assertContains('700000000000000002', $this->ids('org_allowed_members', 'discord_id'));
+        $edit = array_values(array_filter($this->calls, static fn (array $c): bool => str_contains($c[1], '/webhooks/')));
+        $this->assertStringContainsString('Fertig', (string) $edit[0][2]);
+    }
+
+    public function testPersonWithoutUseRoleMayNotSync(): void
+    {
+        $this->setUpOrgWithUseRole();
+        $res = $this->post($this->syncCommand('700000000000000004', []));
+        $this->assertStringContainsString('Nutzungs-Rolle', $this->json($res)['data']['content']);
+        $this->assertCount(0, $res->after);
+        // Auch die Planer-Rolle allein reicht nicht
+        $res = $this->post($this->syncCommand('700000000000000003', [self::ROLE_PLAN]));
+        $this->assertStringContainsString('Nutzungs-Rolle', $this->json($res)['data']['content']);
+    }
+
+    public function testAdminMaySyncWithoutRole(): void
+    {
+        $this->setUpOrgWithUseRole();
+        $res = $this->post($this->syncCommand('700000000000000004', [], '32'));
+        $this->assertSame(5, $this->json($res)['type']);
+    }
+
+    public function testSyncCommandNeverCreatesAnOrg(): void
+    {
+        $res = $this->post($this->syncCommand('700000000000000002', [self::ROLE_USE], '8'));
+        $this->assertStringContainsString('noch keine Orga', $this->json($res)['data']['content']);
+        $this->assertSame(0, (int) Db::val('SELECT COUNT(*) FROM organizations'));
+    }
+
+    public function testSyncCommandHasACooldown(): void
+    {
+        $orgId = $this->setUpOrgWithUseRole();
+        Onboarding::syncAllowlist($orgId);
+        $res = $this->post($this->syncCommand('700000000000000002', [self::ROLE_USE]));
+        $this->assertStringContainsString('gerade erst', $this->json($res)['data']['content']);
+        $this->assertCount(0, $res->after);
+    }
+
+    public function testSyncCommandRespectsTheServerAllowlist(): void
+    {
+        $this->setUpOrgWithUseRole();
+        Env::set('ONBOARDING_GUILD_IDS', '123456789012345678');
+        $res = $this->post($this->syncCommand('700000000000000002', [self::ROLE_USE]));
+        $this->assertStringContainsString('nicht freigeschaltet', $this->json($res)['data']['content']);
     }
 
     public function testSelectionTriggersBackgroundSyncAndEditsTheMessage(): void
