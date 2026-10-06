@@ -370,8 +370,22 @@ Damit prüft die App, zu welcher Orga du gehörst. Scrolle nach unten, bis „Au
   <tr><td>Alles löschen (Neuinstallation)</td><td><code>docker compose down -v</code> löscht <b>auch Datenbank und Bilder</b></td></tr>
 </table>
 <p>Gesichert werden sollte die Datenbank. Die Bilder lädt die App bei Bedarf selbst nach.</p>
-<div class="note"><b>Ohne eigenen Reverse-Proxy:</b> Du kannst Caddy mitstarten, der das Zertifikat selbst holt. Dafür müssen die Ports 80 und 443 aus dem Internet erreichbar sein und die Domain auf den Server zeigen.
-Die dafür nötige Datei <code>docker-compose.override.yml</code> steht in <code>docs/schritt-fuer-schritt.md</code> im Repository (Abschnitt „Weg B“).</div>
+<div class="note keep"><b>Ohne eigenen Reverse-Proxy:</b> Du kannst Caddy mitstarten, der das Zertifikat selbst holt. Dafür müssen die Ports 80 und 443 aus dem Internet erreichbar sein und die Domain per DNS auf den Server zeigen.
+Lege neben der <code>docker-compose.yml</code> eine Datei <code>docker-compose.override.yml</code> an (Docker liest sie automatisch mit):</div>
+<pre class="file">services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    command: caddy reverse-proxy --from ${DOMAIN} --to app:80
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+
+volumes:
+  caddy-data:</pre>
+<p>Dann <code>docker compose up -d</code>. Den Reverse-Proxy aus Kapitel 5 brauchst du in diesem Fall nicht.</p>
 
 <h2><span class="no">14</span>Wenn etwas nicht klappt</h2>
 <table>
