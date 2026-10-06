@@ -142,8 +142,11 @@ final class Discord
         return is_array($data) ? array_values($data) : [];
     }
 
-    /** Rollen-IDs des Nutzers auf dem Server; null, wenn er dort nicht (mehr) Mitglied ist. @return list<string>|null */
-    public static function memberRoles(string $token, string $guildId): ?array
+    /**
+     * Mitgliedsdaten des Nutzers auf dem Server; null, wenn er dort nicht (mehr) Mitglied ist.
+     * @return array{roles:list<string>,nick:?string}|null
+     */
+    public static function member(string $token, string $guildId): ?array
     {
         $res = self::get('/users/@me/guilds/' . rawurlencode($guildId) . '/member', $token);
         if ($res['status'] === 401) {
@@ -157,7 +160,8 @@ final class Discord
         }
         $body = json_decode($res['body'], true);
         $roles = is_array($body) ? ($body['roles'] ?? []) : [];
-        return array_values(array_map('strval', is_array($roles) ? $roles : []));
+        $nick = is_array($body) && is_string($body['nick'] ?? null) && trim($body['nick']) !== '' ? mb_substr(trim($body['nick']), 0, 190) : null;
+        return ['roles' => array_values(array_map('strval', is_array($roles) ? $roles : [])), 'nick' => $nick];
     }
 
     // --- OAuth-Anmeldung (Authorization-Code-Flow) -------------------------------------------

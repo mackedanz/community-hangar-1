@@ -105,6 +105,17 @@ final class CommunityTest extends DbTestCase
         $this->assertNull($by['A-Priv']['achievementCount']);
     }
 
+    public function testServerNicknameReplacesNameOnlyInThatOrg(): void
+    {
+        Db::run('UPDATE org_memberships SET nick = ? WHERE user_id = ? AND org_id = ?', ['Maverick', $this->u['Both'], $this->orgA]);
+        $this->assertSame(['A-Mem', 'A-Priv', 'Maverick'], self::names(Community::listMembers($this->orgA, $this->a1)));
+        $this->assertSame(['B-Mem', 'Both'], self::names(Community::listMembers($this->orgB, $this->b1)));
+        // auch in den Aktivitäten der Orga
+        $this->assertContains('Maverick', self::feedUsers(Community::getFeed($this->orgA, $this->a1)));
+        $this->assertNotContains('Both', self::feedUsers(Community::getFeed($this->orgA, $this->a1)));
+        $this->assertContains('Both', self::feedUsers(Community::getFeed($this->orgB, $this->b1)));
+    }
+
     public function testNonMembersGetNothingEvenWithKnownOrgId(): void
     {
         $this->assertSame([], Community::listMembers($this->orgA, $this->b1));

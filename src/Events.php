@@ -293,17 +293,19 @@ final class Events
         if ($shipRows !== []) {
             $ids = array_column($shipRows, 'id');
             foreach (Db::all(
-                'SELECT x.id, x.event_ship_id, x.label, x.user_id, u.name AS user_name
+                'SELECT x.id, x.event_ship_id, x.label, x.user_id, COALESCE(om.nick, u.name) AS user_name
                    FROM event_slots x LEFT JOIN users u ON u.id = x.user_id
+                   LEFT JOIN org_memberships om ON om.user_id = x.user_id AND om.org_id = ?
                   WHERE x.event_ship_id IN (' . Db::in($ids) . ') ORDER BY x.sort ASC',
-                $ids,
+                [$orgId, ...$ids],
             ) as $x) {
                 $slotsByShip[$x['event_ship_id']][] = ['id' => $x['id'], 'label' => $x['label'], 'userId' => $x['user_id'], 'userName' => $x['user_name']];
             }
         }
         $rsvps = array_map(fn ($r) => ['userId' => $r['user_id'], 'name' => $r['name'] ?? 'Unbekannt', 'status' => $r['status']], Db::all(
-            'SELECT r.user_id, r.status, u.name FROM event_rsvps r JOIN users u ON u.id = r.user_id WHERE r.event_id = ?',
-            [$eventId],
+            'SELECT r.user_id, r.status, COALESCE(om.nick, u.name) AS name FROM event_rsvps r JOIN users u ON u.id = r.user_id
+               LEFT JOIN org_memberships om ON om.user_id = r.user_id AND om.org_id = ? WHERE r.event_id = ?',
+            [$orgId, $eventId],
         ));
         usort($rsvps, fn ($a, $b) => strcasecmp($a['name'], $b['name']));
         $mine = null;
@@ -351,7 +353,7 @@ final class Events
         if (!self::isMemberOf($orgId, $viewer)) {
             return [];
         }
-        $rows = Db::all('SELECT u.id, u.name FROM org_memberships m JOIN users u ON u.id = m.user_id WHERE m.org_id = ?', [$orgId]);
+        $rows = Db::all('SELECT u.id, COALESCE(m.nick, u.name) AS name FROM org_memberships m JOIN users u ON u.id = m.user_id WHERE m.org_id = ?', [$orgId]);
         $out = array_map(fn ($r) => ['id' => $r['id'], 'name' => $r['name'] ?? 'Unbekannt'], $rows);
         usort($out, fn ($a, $b) => strcasecmp($a['name'], $b['name']));
         return $out;

@@ -191,6 +191,23 @@ final class EventsTest extends DbTestCase
         $this->assertNull(Events::getEvent($this->orgA, $this->viewer('Member', [$this->orgA]), $e['id'])['myRsvp']);
     }
 
+    public function testPlanningShowsServerNicknames(): void
+    {
+        Db::run('UPDATE org_memberships SET nick = ? WHERE user_id = ? AND org_id = ?', ['Maverick', $this->u['Member'], $this->orgA]);
+        $e = Events::save($this->u['Admin'], $this->orgA, $this->input());
+        Events::setRsvp($this->u['Member'], $this->orgA, $e['id'], 'YES');
+        $viewer = $this->viewer('Admin', [$this->orgA]);
+        $d = Events::getEvent($this->orgA, $viewer, $e['id']);
+        $this->assertSame(['Maverick'], array_column($d['rsvps'] ?? [], 'name'));
+        $names = array_column(Events::listAssignableMembers($this->orgA, $viewer), 'name');
+        $this->assertContains('Maverick', $names);
+        $this->assertNotContains('Member', $names);
+        $slot = $d['ships'][0]['slots'][0]['id'];
+        Db::run('UPDATE event_slots SET user_id = ? WHERE id = ?', [$this->u['Member'], $slot]);
+        $d = Events::getEvent($this->orgA, $viewer, $e['id']);
+        $this->assertSame('Maverick', $d['ships'][0]['slots'][0]['userName']);
+    }
+
     public function testCancelAndDeleteWorkForPlanners(): void
     {
         $e = Events::save($this->u['Admin'], $this->orgA, $this->input());

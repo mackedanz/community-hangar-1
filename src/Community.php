@@ -132,9 +132,9 @@ final class Community
             return [];
         }
         $rows = Db::all(
-            'SELECT u.id, u.name, u.image, u.rsi_handle, u.hangar_visibility, u.achievements_visibility, m.role
+            'SELECT u.id, COALESCE(m.nick, u.name) AS name, u.image, u.rsi_handle, u.hangar_visibility, u.achievements_visibility, m.role
                FROM org_memberships m JOIN users u ON u.id = m.user_id
-              WHERE m.org_id = ? ORDER BY u.name ASC',
+              WHERE m.org_id = ? ORDER BY COALESCE(m.nick, u.name) ASC',
             [$orgId],
         );
         if ($rows === []) {
@@ -261,16 +261,18 @@ final class Community
 
         // Großzügig laden: Mehrere Errungenschaften desselben Tages werden zu einer Zeile.
         $achievements = Db::all(
-            "SELECT ua.earned_at, u.id AS user_id, u.name, a.title
+            "SELECT ua.earned_at, u.id AS user_id, COALESCE(om.nick, u.name) AS name, a.title
                FROM user_achievements ua JOIN users u ON u.id = ua.user_id JOIN achievements a ON a.id = ua.achievement_id
+               LEFT JOIN org_memberships om ON om.user_id = u.id AND om.org_id = ?
               WHERE $inOrg AND $wAch ORDER BY ua.earned_at DESC LIMIT " . ($take * 10),
-            [$orgId, ...$pAch],
+            [$orgId, $orgId, ...$pAch],
         );
         $imports = Db::all(
-            "SELECT l.created_at, l.created, u.id AS user_id, u.name
+            "SELECT l.created_at, l.created, u.id AS user_id, COALESCE(om.nick, u.name) AS name
                FROM import_logs l JOIN users u ON u.id = l.user_id
+               LEFT JOIN org_memberships om ON om.user_id = u.id AND om.org_id = ?
               WHERE $inOrg AND $wHan ORDER BY l.created_at DESC LIMIT $take",
-            [$orgId, ...$pHan],
+            [$orgId, $orgId, ...$pHan],
         );
 
         $events = self::groupAchievements($achievements);

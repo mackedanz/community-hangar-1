@@ -15,6 +15,8 @@ final class FakeDiscord
     public array $guilds = [];
     /** @var array<string,list<string>> */
     public array $roles = [];
+    /** @var array<string,string> Server-Nickname pro Server */
+    public array $nicks = [];
     public int $guildsStatus = 200;
     public int $tokenStatus = 200;
     /** @var array<string,mixed> Profil für /users/@me */
@@ -39,7 +41,7 @@ final class FakeDiscord
                 return $this->guildsStatus === 200 ? $json($this->guilds) : $json([], $this->guildsStatus);
             }
             if (preg_match('#/users/@me/guilds/([^/]+)/member$#', $url, $m)) {
-                return isset($this->roles[$m[1]]) ? $json(['roles' => $this->roles[$m[1]]]) : $json(['code' => 10004], 404);
+                return isset($this->roles[$m[1]]) ? $json(['roles' => $this->roles[$m[1]], 'nick' => $this->nicks[$m[1]] ?? null]) : $json(['code' => 10004], 404);
             }
             return $json([], 500);
         });

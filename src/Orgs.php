@@ -50,14 +50,25 @@ final class Orgs
                 $required = self::parseRoleIds($org['member_role_ids']);
                 $planners = self::parseRoleIds($org['planner_role_ids']);
                 $canPlan = $admin;
-                if (!$admin && ($required !== [] || $planners !== [])) {
-                    $roles = Discord::memberRoles($token, $org['discord_guild_id']);
+                $needRoles = !$admin && ($required !== [] || $planners !== []);
+                $member = null;
+                try {
+                    $member = Discord::member($token, $org['discord_guild_id']);
+                } catch (DiscordAuthError | DiscordUnavailableError $e) {
+                    // Rollen sind nötig, um den Zugang zu prüfen; der Nickname allein ist es nicht.
+                    if ($needRoles) {
+                        throw $e;
+                    }
+                }
+                $roles = $member['roles'] ?? null;
+                $nick = $member['nick'] ?? null;
+                if ($needRoles) {
                     if ($required !== [] && ($roles === null || array_intersect($required, $roles) === [])) {
                         continue;
                     }
                     $canPlan = $roles !== null && array_intersect($planners, $roles) !== [];
                 }
-                $valid[] = ['orgId' => $org['id'], 'role' => $admin ? 'ADMIN' : 'MEMBER', 'canPlan' => $canPlan];
+                $valid[] = ['orgId' => $org['id'], 'role' => $admin ? 'ADMIN' : 'MEMBER', 'canPlan' => $canPlan, 'nick' => $nick];
             }
 
             Db::transaction(function () use ($userId, $valid, $nowDb): void {
@@ -69,9 +80,9 @@ final class Orgs
                 }
                 foreach ($valid as $v) {
                     Db::run(
-                        'INSERT INTO org_memberships (user_id, org_id, role, can_plan, verified_at) VALUES (?,?,?,?,?)
-                         ON DUPLICATE KEY UPDATE role = VALUES(role), can_plan = VALUES(can_plan), verified_at = VALUES(verified_at)',
-                        [$userId, $v['orgId'], $v['role'], $v['canPlan'], $nowDb],
+                        'INSERT INTO org_memberships (user_id, org_id, role, can_plan, nick, verified_at) VALUES (?,?,?,?,?,?)
+                         ON DUPLICATE KEY UPDATE role = VALUES(role), can_plan = VALUES(can_plan), nick = VALUES(nick), verified_at = VALUES(verified_at)',
+                        [$userId, $v['orgId'], $v['role'], $v['canPlan'], $v['nick'], $nowDb],
                     );
                 }
                 Db::run("UPDATE users SET membership_checked_at = ?, membership_status = 'OK' WHERE id = ?", [$nowDb, $userId]);

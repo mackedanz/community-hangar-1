@@ -120,11 +120,42 @@ final class OrgsTest extends DbTestCase
         // Rollen nur für registrierte Orgas mit Rolle, nie für fremde Server
         $calls = implode("\n", $this->discord->calls);
         $this->assertStringNotContainsString('g-unregistriert', $calls);
-        $this->assertStringNotContainsString('g-open/member', $calls);
+        // Auch bei offenen Orgas wird der Nickname geholt; ohne Mitgliedsdaten bleibt die Person trotzdem Mitglied.
 
         $u = Db::one('SELECT * FROM users WHERE id = ?', [$user['id']]);
         $this->assertSame('OK', $u['membership_status']);
         $this->assertNotNull($u['membership_checked_at']);
+    }
+
+    public function testStoresServerNicknamePerOrgAndUpdatesIt(): void
+    {
+        $a = $this->mkOrg('g-a');
+        $b = $this->mkOrg('g-b');
+        $user = $this->mkDiscordUser();
+        $this->discord->guilds = [FakeDiscord::guild('g-a'), FakeDiscord::guild('g-b')];
+        $this->discord->roles = ['g-a' => ['role-member'], 'g-b' => ['role-member']];
+        $this->discord->nicks = ['g-a' => '  Maverick  '];
+
+        $this->assertSame('OK', Orgs::syncMemberships($user['id']));
+        $this->assertSame('Maverick', Db::val('SELECT nick FROM org_memberships WHERE user_id = ? AND org_id = ?', [$user['id'], $a['id']]));
+        $this->assertNull(Db::val('SELECT nick FROM org_memberships WHERE user_id = ? AND org_id = ?', [$user['id'], $b['id']]));
+
+        $this->discord->nicks = ['g-a' => 'Goose'];
+        Orgs::syncMemberships($user['id']);
+        $this->assertSame('Goose', Db::val('SELECT nick FROM org_memberships WHERE user_id = ? AND org_id = ?', [$user['id'], $a['id']]));
+        $this->discord->nicks = [];
+        Orgs::syncMemberships($user['id']);
+        $this->assertNull(Db::val('SELECT nick FROM org_memberships WHERE user_id = ? AND org_id = ?', [$user['id'], $a['id']]));
+    }
+
+    public function testAdminStaysAdminWhenNicknameLookupFails(): void
+    {
+        $this->mkOrg('g-adm');
+        $user = $this->mkDiscordUser();
+        $this->discord->guilds = [FakeDiscord::guild('g-adm', ['permissions' => '8'])];
+        // kein Eintrag in roles: das nachgebaute Discord antwortet mit 404 auf die Mitgliedsabfrage
+        $this->assertSame('OK', Orgs::syncMemberships($user['id']));
+        $this->assertSame(['g-adm:ADMIN'], $this->orgsOf($user['id']));
     }
 
     public function testOneOfSeveralRolesIsEnough(): void
