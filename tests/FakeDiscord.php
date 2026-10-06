@@ -9,7 +9,7 @@ use Hangar\Http\Client;
 /** Nachgebautes Discord: Serverliste, Rollen pro Server, erzwungene Fehlerstatus. */
 final class FakeDiscord
 {
-    public const SCOPES = 'identify email guilds guilds.members.read';
+    public const SCOPES = 'identify guilds guilds.members.read';
 
     /** @var list<array<string,mixed>> */
     public array $guilds = [];
@@ -18,7 +18,7 @@ final class FakeDiscord
     public int $guildsStatus = 200;
     public int $tokenStatus = 200;
     /** @var array<string,mixed> Profil für /users/@me */
-    public array $profile = ['id' => '123456789012345678', 'username' => 'tester', 'global_name' => 'Tester', 'email' => 't@example.test', 'avatar' => 'abc'];
+    public array $profile = ['id' => '123456789012345678', 'username' => 'tester', 'global_name' => 'Tester', 'avatar' => 'abc'];
     /** @var list<string> */
     public array $calls = [];
 

@@ -9,7 +9,7 @@
 
   <h2 class="text-lg font-semibold text-zinc-100">Welche Daten gespeichert werden</h2>
   <ul class="list-disc space-y-1 pl-5">
-    <li>Von Discord bei der Anmeldung: Discord-ID, Anzeigename, Avatar und E-Mail-Adresse. Dein Discord-Passwort sieht und speichert diese App nie.</li>
+    <li>Von Discord bei der Anmeldung: Discord-ID, Anzeigename und Avatar. Die E-Mail-Adresse wird nicht abgefragt und nicht gespeichert. Dein Discord-Passwort sieht und speichert diese App nie.</li>
     <li>
       Deine Orga-Mitgliedschaften. Dafür fragt die App bei Discord deine Serverliste und deine
       Rollen auf den Servern registrierter Orgas ab (Discord-Freigaben „guilds“ und

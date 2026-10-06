@@ -177,12 +177,4 @@ final class SqliteImportTest extends DbTestCase
             $this->assertSame(0, $this->rows('owned_items'));
         }
     }
-
-    public function testDuplicateEmailsAreDroppedWithNote(): void
-    {
-        $this->src->exec("UPDATE User SET email = 'a@x.test' WHERE id = 'u2'");
-        $res = (new SqliteImport($this->src))->run(false, 2);
-        $this->assertSame(1, (int) Db::val('SELECT COUNT(*) FROM users WHERE email IS NOT NULL'));
-        $this->assertNotEmpty(array_filter($res['notes'], fn ($n) => str_contains($n, 'E-Mail')));
-    }
 }

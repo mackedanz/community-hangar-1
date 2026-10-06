@@ -184,7 +184,7 @@ final class OrgsTest extends DbTestCase
 
     public function testNewLoginRequiredWhenScopesMissing(): void
     {
-        $user = $this->mkDiscordUser('identify email');
+        $user = $this->mkDiscordUser('identify');
         $this->assertSame('REAUTH', Orgs::syncMemberships($user['id']));
         $this->assertSame([], $this->discord->calls);
     }

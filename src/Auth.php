@@ -205,17 +205,15 @@ final class Auth
     {
         $discordId = (string) $profile['id'];
         $name = (string) ($profile['global_name'] ?? $profile['username'] ?? 'Discord-Nutzer');
-        $email = isset($profile['email']) && is_string($profile['email']) ? $profile['email'] : null;
         $image = !empty($profile['avatar']) ? "https://cdn.discordapp.com/avatars/{$discordId}/{$profile['avatar']}.png" : null;
 
-        return Db::transaction(function () use ($discordId, $name, $email, $image, $token): string {
+        return Db::transaction(function () use ($discordId, $name, $image, $token): string {
             $acc = Db::one("SELECT * FROM accounts WHERE provider = 'discord' AND provider_account_id = ?", [$discordId]);
             $userId = $acc['user_id'] ?? Db::val('SELECT id FROM users WHERE discord_id = ?', [$discordId]);
             if ($userId === null) {
                 $userId = new_id();
-                $emailTaken = $email !== null && Db::val('SELECT 1 FROM users WHERE email = ?', [$email]) !== null;
                 Db::insert('users', [
-                    'id' => $userId, 'name' => $name, 'email' => $emailTaken ? null : $email,
+                    'id' => $userId, 'name' => $name,
                     'image' => $image, 'discord_id' => $discordId,
                 ]);
             } else {

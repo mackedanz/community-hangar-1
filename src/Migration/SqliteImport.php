@@ -155,18 +155,9 @@ final class SqliteImport
     {
         $rows = $this->rows('SELECT * FROM User');
         $sourceRows['users'] = count($rows);
-        $emails = [];
         foreach ($rows as $r) {
-            $email = $r['email'] ?? null;
-            if ($email !== null && isset($emails[$email])) {
-                $this->notes[] = "E-Mail von {$r['id']} doppelt, nicht übernommen.";
-                $email = null;
-            }
-            if ($email !== null) {
-                $emails[$email] = true;
-            }
             Db::insert('users', [
-                'id' => $r['id'], 'name' => $r['name'], 'email' => $email, 'image' => $r['image'], 'discord_id' => $r['discordId'],
+                'id' => $r['id'], 'name' => $r['name'], 'image' => $r['image'], 'discord_id' => $r['discordId'],
                 'rsi_handle' => $r['rsiHandle'], 'hangar_visibility' => $r['hangarVisibility'] ?? 'MEMBERS',
                 'achievements_visibility' => $r['achievementsVisibility'] ?? 'MEMBERS',
                 'membership_checked_at' => $this->date($r['membershipCheckedAt']), 'membership_status' => $r['membershipStatus'],

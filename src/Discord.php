@@ -16,7 +16,7 @@ final class Discord
     public const API = 'https://discord.com/api/v10';
     public const TOKEN_URL = 'https://discord.com/api/oauth2/token';
     public const AUTHORIZE_URL = 'https://discord.com/api/oauth2/authorize';
-    public const SCOPES = 'identify email guilds guilds.members.read';
+    public const SCOPES = 'identify guilds guilds.members.read';
     private const REQUIRED_SCOPES = ['guilds', 'guilds.members.read'];
 
     /**
