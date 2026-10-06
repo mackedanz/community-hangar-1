@@ -52,7 +52,9 @@
     if (plan.unmatched.length > 0) {
       p.appendChild(document.createTextNode(", "));
       p.appendChild(b(plan.unmatched.length));
-      p.appendChild(document.createTextNode(" Schiffe nicht im Katalog (werden mit ihrem Namen übernommen)"));
+      p.appendChild(document.createTextNode(plan.unmatched.length === 1
+        ? " Schiff nicht im Katalog (wird mit seinem Namen übernommen)"
+        : " Schiffe nicht im Katalog (werden mit ihrem Namen übernommen)"));
     }
     if (plan.others.length > 0) {
       p.appendChild(document.createTextNode(", dazu "));

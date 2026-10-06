@@ -11,6 +11,12 @@ $serverAdmin = $serverAdmin ?? false;
 $csrf = $csrf ?? '';
 $title = isset($title) && $title !== '' ? $title . ' · Community-Hangar' : 'Community-Hangar';
 $link = 'text-zinc-400 hover:text-zinc-100';
+// Aktuelle Seite in der Navigation hervorheben (wie die Reiter im Orga-Bereich)
+$path = (string) parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
+$here = static fn (string $prefix): bool => $path === $prefix || str_starts_with($path, $prefix . '/');
+$navClass = static fn (bool $active, string $idle = 'text-zinc-400 hover:text-zinc-100', string $on = 'text-zinc-100'): string
+    => $active ? $on . ' underline underline-offset-8' : $idle;
+$cur = static fn (bool $active): string => $active ? ' aria-current="page"' : '';
 $privacyUrl = \Hangar\Env::get('LEGAL_PRIVACY_URL');
 $imprintUrl = \Hangar\Env::get('LEGAL_IMPRINT_URL');
 ?><!DOCTYPE html>
@@ -33,20 +39,20 @@ $imprintUrl = \Hangar\Env::get('LEGAL_IMPRINT_URL');
 <header class="border-b border-zinc-800">
   <nav class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
     <a href="/" class="font-semibold">Community-Hangar</a>
-    <a href="/catalog" class="<?= $link ?>">Katalog</a>
+    <a href="/catalog" class="<?= $navClass($here('/catalog')) ?>"<?= $cur($here('/catalog')) ?>>Katalog</a>
     <?php if ($viewer): ?>
       <?php if (count($viewer->orgs) === 1): $o = $viewer->orgs[0]; ?>
-        <a href="/o/<?= e($o['slug']) ?>" class="flex items-center gap-2 <?= $link ?>">
+        <a href="/o/<?= e($o['slug']) ?>" class="flex items-center gap-2 <?= $navClass($here('/o/' . $o['slug'])) ?>"<?= $cur($here('/o/' . $o['slug'])) ?>>
           <?= \Hangar\Http\View::partial('partials/org_icon', ['name' => $o['name'], 'iconUrl' => $o['iconUrl'], 'size' => 'h-5 w-5']) ?>
           <?= e($o['name']) ?>
         </a>
       <?php elseif (count($viewer->orgs) > 1): ?>
         <details class="relative" data-org-menu>
-          <summary class="cursor-pointer <?= $link ?>">Orgas ▾</summary>
+          <summary class="cursor-pointer <?= $navClass($here('/o')) ?>">Orgas ▾</summary>
           <ul class="absolute left-0 z-10 mt-2 w-56 rounded border border-zinc-700 bg-zinc-900 py-1 shadow-lg">
             <?php foreach ($viewer->orgs as $o): ?>
               <li>
-                <a href="/o/<?= e($o['slug']) ?>" class="flex items-center gap-2 px-3 py-2 hover:bg-zinc-800">
+                <a href="/o/<?= e($o['slug']) ?>" class="flex items-center gap-2 px-3 py-2 hover:bg-zinc-800<?= $here('/o/' . $o['slug']) ? ' font-semibold text-zinc-100' : '' ?>"<?= $cur($here('/o/' . $o['slug'])) ?>>
                   <?= \Hangar\Http\View::partial('partials/org_icon', ['name' => $o['name'], 'iconUrl' => $o['iconUrl'], 'size' => 'h-5 w-5']) ?>
                   <?= e($o['name']) ?>
                 </a>
@@ -55,11 +61,11 @@ $imprintUrl = \Hangar\Env::get('LEGAL_IMPRINT_URL');
           </ul>
         </details>
       <?php endif; ?>
-      <a href="/hangar" class="<?= $link ?>">Mein Hangar</a>
-      <a href="/sync" class="<?= $link ?>">RSI-Sync</a>
-      <a href="/settings" class="<?= $link ?>">Einstellungen</a>
+      <a href="/hangar" class="<?= $navClass($here('/hangar')) ?>"<?= $cur($here('/hangar')) ?>>Mein Hangar</a>
+      <a href="/sync" class="<?= $navClass($here('/sync')) ?>"<?= $cur($here('/sync')) ?>>RSI-Sync</a>
+      <a href="/settings" class="<?= $navClass($here('/settings')) ?>"<?= $cur($here('/settings')) ?>>Einstellungen</a>
       <?php if (!empty($serverAdmin)): ?>
-        <a href="/admin" class="text-amber-400 hover:text-amber-300">Server-Admin</a>
+        <a href="/admin" class="<?= $navClass($here('/admin'), 'text-amber-400 hover:text-amber-300', 'text-amber-300') ?>"<?= $cur($here('/admin')) ?>>Server-Admin</a>
       <?php endif; ?>
       <span class="ml-auto"><button type="button" data-theme-toggle class="<?= $link ?>"></button></span>
       <form method="post" action="/logout">
