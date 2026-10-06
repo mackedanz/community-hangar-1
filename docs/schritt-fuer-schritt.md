@@ -277,7 +277,7 @@ Anwendung im Developer Portal an (Schritt 1).
 | „Dieser Server ist nicht freigeschaltet“ | Server-ID in `ONBOARDING_GUILD_IDS` eintragen, dann `docker compose up -d`. |
 | Anmeldung sagt „nicht auf der Zugangsliste“ | Die Person hat keine der gewählten Rollen oder der Abgleich lief noch nicht (läuft stündlich, oder Knopf „Mitglieder jetzt abgleichen“). Du selbst kommst über `SERVER_ADMIN_DISCORD_ID` immer herein. Notfalls `LOGIN_REQUIRES_ALLOWLIST=0` setzen und `docker compose up -d`. |
 | Katalog leer | `docker compose exec app php bin/catalog-sync.php` und die Ausgabe lesen (RSI-Server erreichbar?). |
-| Bilder fehlen anfangs | Normal: Die App lädt sie beim ersten Anzeigen von FleetYards. Mit `bin/warm-images.php` vorab laden. |
+| Bilder fehlen anfangs | Normal: Die App lädt sie beim ersten Anzeigen von RSI. Mit `bin/warm-images.php` vorab laden. |
 
 ## Von der alten Version (Next.js) übernehmen
 

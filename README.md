@@ -3,7 +3,7 @@
 Inoffizielle Community-Web-App für Star Citizen (PHP 8.3 + MariaDB): Besitz per RSI-Sync erfassen, mit der
 eigenen Orga teilen, Events planen, Errungenschaften sammeln. Login über Discord, Onboarding über einen
 Discord-Bot. Schiffskatalog aus der **RSI Ship Matrix**
-(`https://robertsspaceindustries.com/ship-matrix/index`), Ergänzungen und Bilder von FleetYards,
+(`https://robertsspaceindustries.com/ship-matrix/index`) mit Schiffsbildern von RSI, Ergänzungen von FleetYards,
 Rüstungen aus der Star Citizen Wiki.
 
 ## Aufbau
@@ -46,7 +46,7 @@ docker compose up -d
 ```
 
 Der Container wartet auf die Datenbank, spielt die Migrationen ein und gleicht den Katalog wöchentlich ab
-(`CATALOG_SYNC_INTERVAL_SECONDS`). Schiffsbilder werden beim ersten Aufruf eines Schiffs von FleetYards geladen und im
+(`CATALOG_SYNC_INTERVAL_SECONDS`). Schiffsbilder werden beim ersten Aufruf eines Schiffs von RSI geladen (erstes Bild der Store-Seite) und im
 Volume `ship-images` abgelegt (`/img/ship/{slug}`).
 
 ### Übernahme der Daten aus der alten Version (Next.js + SQLite)
@@ -67,7 +67,7 @@ Katalog verknüpft. Schiffe, die es in der Ship Matrix nicht gibt, bleiben als f
 - Alle POST-Formulare tragen ein CSRF-Token; die Import-API akzeptiert nur Bearer-Token oder Sitzung mit `application/json`.
 - Nicht-Mitglieder bekommen für Orga-Seiten 404, `/admin` ist für alle außer `SERVER_ADMIN_DISCORD_ID` ein 404.
 - Der Orga-Hangar ist anonym (keine Nutzer-IDs/Namen in der Abfrage).
-- Bilder werden nur von einer festen Host-Liste (FleetYards) geladen, geprüft (Typ, Größe) und atomar gespeichert.
+- Bilder werden nur von einer festen Host-Liste (RSI-Bildspeicher) geladen, geprüft (Typ, Größe) und atomar gespeichert.
 
 ## Onboarding-Bot (optional)
 

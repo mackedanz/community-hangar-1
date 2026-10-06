@@ -5,25 +5,22 @@ declare(strict_types=1);
 namespace Hangar\Images;
 
 use Hangar\Config;
+use Hangar\Constants;
 use Hangar\Db;
 use Hangar\Http\Client;
 use Hangar\Http\NetworkError;
-use Hangar\Text;
 use Hangar\Time;
 
 /**
- * Schiffsbilder aus der FleetYards-API, lazy auf dem Server gespeichert: Beim ersten Aufruf eines
+ * Schiffsbilder von RSI (erstes Bild der Store-Seite), lazy auf dem Server gespeichert: Beim ersten Aufruf eines
  * Schiffs wird geprüft, ob das Bild schon vorhanden ist. Ja: das gespeicherte Bild wird genutzt.
  * Nein: es wird heruntergeladen, geprüft, gespeichert und angezeigt.
  */
 final class ShipImages
 {
-    private const API = 'https://api.fleetyards.net/v1';
-    /** Nur von diesen Hosts wird geladen (API und deren Bild-Speicher), nur per https. */
-    public const ALLOWED_HOSTS = [
-        'api.fleetyards.net', 'cdn.fltyrd.net', 'cdn.fleetyards.net', 'storage.fltyrd.net',
-        'fltyrd-live-storage.fsn1.your-objectstorage.com',
-    ];
+    private const QUERY = 'query ShipImage($query: SearchQuery) { store(browse: true) { search(query: $query) { resources { url ... on RSIShip { media { thumbnail { slideshow } } } } } } }';
+    /** Nur von diesem Host wird geladen (RSI-Bildspeicher), nur per https. */
+    public const ALLOWED_HOSTS = ['media.robertsspaceindustries.com'];
     public const MAX_BYTES = 5 * 1024 * 1024;
     /** Nach einem Fehlschlag wird frühestens nach dieser Zeit erneut versucht. */
     public const RETRY_SECONDS = 86400;
@@ -68,7 +65,7 @@ final class ShipImages
         if (($have = self::existing($slug)) !== null) {
             return $have;
         }
-        $row = Db::one("SELECT id, name, image_slug, image_checked_at FROM catalog_items WHERE kind = 'SHIP' AND slug = ?", [$slug]);
+        $row = Db::one("SELECT id, data, image_checked_at FROM catalog_items WHERE kind = 'SHIP' AND slug = ?", [$slug]);
         if ($row === null) {
             return null;
         }
@@ -113,67 +110,32 @@ final class ShipImages
         }
     }
 
-    /** Bild-URL aus dem FleetYards-Modell; ermittelt bei Bedarf den FleetYards-Slug und merkt ihn sich. @param array<string,mixed> $row */
+    /**
+     * Bild-URL des Schiffs von RSI: Die Store-Seite des Schiffs (Link aus der Ship Matrix) liefert per
+     * GraphQL ihr erstes Bild. Es steht unter media.thumbnail.slideshow.
+     * @param array<string,mixed> $row
+     */
     private static function imageUrl(array $row): ?string
     {
-        $fy = (string) ($row['image_slug'] ?? '');
-        $model = $fy !== '' ? self::model($fy) : null;
-        if ($model === null) {
-            $model = self::findModel((string) $row['name']);
-            if ($model !== null && isset($model['slug'])) {
-                Db::run('UPDATE catalog_items SET image_slug = ? WHERE id = ?', [(string) $model['slug'], $row['id']]);
-            }
-        }
-        $img = $model['media']['storeImage'] ?? null;
-        if (!is_array($img)) {
+        $data = json_decode((string) ($row['data'] ?? ''), true);
+        $webUrl = is_array($data) && is_string($data['webUrl'] ?? null) ? $data['webUrl'] : '';
+        if (!str_starts_with($webUrl, Constants::RSI_BASE_URL . '/pledge/')) {
             return null;
         }
-        foreach (['mediumUrl', 'url', 'largeUrl', 'smallUrl'] as $k) {
-            if (isset($img[$k]) && is_string($img[$k]) && $img[$k] !== '') {
-                return $img[$k];
-            }
-        }
-        return null;
-    }
+        $path = substr($webUrl, strlen(Constants::RSI_BASE_URL));
 
-    /** @return array<string,mixed>|null */
-    private static function model(string $fleetyardsSlug): ?array
-    {
-        $res = Client::get(self::API . '/models/' . rawurlencode($fleetyardsSlug), ['Accept' => 'application/json'], 15);
-        if ($res['status'] !== 200) {
-            return null;
-        }
-        $m = json_decode($res['body'], true);
-        return is_array($m) ? $m : null;
-    }
-
-    /** Sucht das Modell über den Namen: erst als Slug (FleetYards leitet um), dann über die Suche. @return array<string,mixed>|null */
-    private static function findModel(string $name): ?array
-    {
-        $key = Text::normalizeName($name);
-        $direct = self::model(Text::slugify($name, 120, 'x'));
-        if ($direct !== null && self::sameName($direct, $key)) {
-            return $direct;
-        }
-        $res = Client::get(self::API . '/models?perPage=30&q=' . rawurlencode($name), ['Accept' => 'application/json'], 15);
+        $res = Client::request('POST', Constants::RSI_BASE_URL . '/graphql', ['Content-Type' => 'application/json', 'Accept' => 'application/json'], json_encode([
+            'query' => self::QUERY,
+            'variables' => ['query' => ['ships' => ['urls' => [$path]]]],
+        ], JSON_THROW_ON_ERROR), 15);
         $body = $res['status'] === 200 ? json_decode($res['body'], true) : null;
-        foreach (is_array($body) && is_array($body['items'] ?? null) ? $body['items'] : [] as $m) {
-            if (is_array($m) && self::sameName($m, $key) && isset($m['slug'])) {
-                return self::model((string) $m['slug']) ?? $m;
+        foreach ($body['data']['store']['search']['resources'] ?? [] as $r) {
+            if (is_array($r) && ($r['url'] ?? null) === $path) {
+                $url = $r['media']['thumbnail']['slideshow'] ?? null;
+                return is_string($url) && $url !== '' ? $url : null;
             }
         }
         return null;
-    }
-
-    /** @param array<string,mixed> $model */
-    private static function sameName(array $model, string $key): bool
-    {
-        foreach (['name', 'rsiName'] as $f) {
-            if (is_string($model[$f] ?? null) && Text::normalizeName($model[$f]) === $key) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /** @param list<string> $hosts */

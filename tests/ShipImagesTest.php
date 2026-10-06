@@ -16,6 +16,8 @@ final class ShipImagesTest extends DbTestCase
     private string $dir;
     /** @var list<string> */
     private array $urls = [];
+    /** @var list<array<string,mixed>> */
+    private array $queries = [];
     private string $png;
 
     protected function setUp(): void
@@ -26,7 +28,7 @@ final class ShipImagesTest extends DbTestCase
         Env::set('IMAGE_DIR', $this->dir);
         // kleines gültiges PNG (1x1)
         $this->png = (string) base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
-        Db::insert('catalog_items', ['id' => 'c1', 'kind' => 'SHIP', 'slug' => 'retaliator', 'name' => 'Retaliator', 'match_key' => 'retaliator', 'source' => 'RSI_MATRIX', 'image_slug' => 'aegs-retaliator', 'data' => '{}']);
+        Db::insert('catalog_items', ['id' => 'c1', 'kind' => 'SHIP', 'slug' => 'retaliator', 'name' => 'Retaliator', 'match_key' => 'retaliator', 'source' => 'RSI_MATRIX', 'data' => json_encode(['webUrl' => 'https://robertsspaceindustries.com/pledge/ships/aegis-retaliator/Retaliator-Bomber'])]);
     }
 
     protected function tearDown(): void
@@ -39,20 +41,19 @@ final class ShipImagesTest extends DbTestCase
         parent::tearDown();
     }
 
-    /** Fake für FleetYards-API und Bild-Speicher mit einer Weiterleitung wie im echten Betrieb. */
-    private function installFleetYards(?string $imageBody = null, int $imageStatus = 200, string $storageHost = 'storage.fltyrd.net'): void
+    /** Fake für die RSI-GraphQL-Schnittstelle und den RSI-Bildspeicher mit einer Weiterleitung wie im echten Betrieb. */
+    private function installRsi(?string $imageBody = null, int $imageStatus = 200, string $mediaHost = 'media.robertsspaceindustries.com', ?string $resourceUrl = '/pledge/ships/aegis-retaliator/Retaliator-Bomber'): void
     {
         $imageBody ??= $this->png;
-        Client::fake(function (string $m, string $url) use ($imageBody, $imageStatus, $storageHost) {
+        Client::fake(function (string $m, string $url, array $h, ?string $body) use ($imageBody, $imageStatus, $mediaHost, $resourceUrl) {
             $this->urls[] = $url;
-            if (str_starts_with($url, 'https://api.fleetyards.net/v1/models/aegs-retaliator')) {
-                return ['status' => 200, 'headers' => [], 'body' => json_encode([
-                    'slug' => 'aegs-retaliator', 'name' => 'Retaliator',
-                    'media' => ['storeImage' => ['mediumUrl' => 'https://api.fleetyards.net/files/representations/redirect/abc']],
-                ])];
+            if ($url === 'https://robertsspaceindustries.com/graphql') {
+                $this->queries[] = json_decode((string) $body, true);
+                $resources = $resourceUrl === null ? [] : [['url' => $resourceUrl, 'media' => ['thumbnail' => ['slideshow' => "https://$mediaHost/abc/slideshow.jpg"]]]];
+                return ['status' => 200, 'headers' => [], 'body' => json_encode(['data' => ['store' => ['search' => ['resources' => $resources]]]])];
             }
-            if (str_starts_with($url, 'https://api.fleetyards.net/files/')) {
-                return ['status' => 302, 'headers' => ['location' => "https://$storageHost/xyz?origin="], 'body' => ''];
+            if (str_contains($url, '/abc/slideshow.jpg')) {
+                return ['status' => 302, 'headers' => ['location' => "https://$mediaHost/xyz"], 'body' => ''];
             }
             if (str_contains($url, '/xyz')) {
                 return ['status' => $imageStatus, 'headers' => ['content-type' => 'image/png'], 'body' => $imageBody];
@@ -63,7 +64,7 @@ final class ShipImagesTest extends DbTestCase
 
     public function testDownloadsOnFirstCallAndStoresTheFile(): void
     {
-        $this->installFleetYards();
+        $this->installRsi();
         $img = ShipImages::ensure('retaliator');
         $this->assertNotNull($img);
         $this->assertSame('image/png', $img['mime']);
@@ -74,7 +75,7 @@ final class ShipImagesTest extends DbTestCase
 
     public function testUsesStoredFileWithoutAnyHttpCall(): void
     {
-        $this->installFleetYards();
+        $this->installRsi();
         ShipImages::ensure('retaliator');
         $this->urls = [];
         Client::fake(function (): never {
@@ -86,7 +87,7 @@ final class ShipImagesTest extends DbTestCase
 
     public function testRejectsDisallowedHostsAndStoresNothing(): void
     {
-        $this->installFleetYards(null, 200, 'evil.example');
+        $this->installRsi(null, 200, 'evil.example');
         $this->assertNull(ShipImages::ensure('retaliator'));
         $this->assertSame([], glob($this->dir . '/ships/*.png'));
         $this->assertNotNull(Db::val('SELECT image_checked_at FROM catalog_items WHERE id = ?', ['c1']));
@@ -97,10 +98,10 @@ final class ShipImagesTest extends DbTestCase
 
     public function testRejectsNonImagesAndHttpErrors(): void
     {
-        $this->installFleetYards('<html>kein Bild</html>');
+        $this->installRsi('<html>kein Bild</html>');
         $this->assertNull(ShipImages::ensure('retaliator'));
         Db::run('UPDATE catalog_items SET image_checked_at = NULL');
-        $this->installFleetYards($this->png, 404);
+        $this->installRsi($this->png, 404);
         $this->assertNull(ShipImages::ensure('retaliator'));
         $this->assertSame([], glob($this->dir . '/ships/*') ?: []);
     }
@@ -114,7 +115,7 @@ final class ShipImagesTest extends DbTestCase
         $this->assertNotNull(Db::val('SELECT image_checked_at FROM catalog_items WHERE id = ?', ['c1']));
 
         $this->urls = [];
-        $this->installFleetYards();
+        $this->installRsi();
         $this->assertNull(ShipImages::ensure('retaliator'));
         $this->assertSame([], $this->urls);
 
@@ -125,7 +126,7 @@ final class ShipImagesTest extends DbTestCase
 
     public function testInvalidSlugsNeverTouchTheFilesystemOrNetwork(): void
     {
-        $this->installFleetYards();
+        $this->installRsi();
         foreach (['../etc/passwd', 'a/b', '..', '', 'UPPER', str_repeat('a', 130), "x\0y"] as $bad) {
             $this->assertFalse(ShipImages::validSlug($bad), $bad);
             $this->assertNull(ShipImages::ensure($bad));
@@ -135,37 +136,43 @@ final class ShipImagesTest extends DbTestCase
 
     public function testUnknownCatalogSlugGivesNoImage(): void
     {
-        $this->installFleetYards();
+        $this->installRsi();
         $this->assertNull(ShipImages::ensure('gibt-es-nicht'));
         $this->assertSame([], $this->urls);
     }
 
-    public function testFindsFleetYardsSlugByNameWhenNotKnown(): void
+    public function testAsksRsiForTheShipPageByItsMatrixUrl(): void
     {
-        Db::run('UPDATE catalog_items SET image_slug = NULL');
-        Client::fake(function (string $m, string $url) {
-            $this->urls[] = $url;
-            if (str_contains($url, '/models/retaliator')) {
-                return ['status' => 200, 'headers' => [], 'body' => json_encode([
-                    'slug' => 'aegs-retaliator', 'name' => 'Retaliator',
-                    'media' => ['storeImage' => ['url' => 'https://storage.fltyrd.net/xyz']],
-                ])];
-            }
-            if (str_contains($url, '/xyz')) {
-                return ['status' => 200, 'headers' => [], 'body' => $this->png];
-            }
-            return ['status' => 404, 'headers' => [], 'body' => ''];
-        });
+        $this->installRsi();
         $this->assertNotNull(ShipImages::ensure('retaliator'));
-        $this->assertSame('aegs-retaliator', Db::val('SELECT image_slug FROM catalog_items WHERE id = ?', ['c1']));
+        $this->assertSame(['/pledge/ships/aegis-retaliator/Retaliator-Bomber'], $this->queries[0]['variables']['query']['ships']['urls']);
+    }
+
+    public function testNoImageWhenRsiKnowsNoMatchingShip(): void
+    {
+        $this->installRsi(null, 200, 'media.robertsspaceindustries.com', '/pledge/ships/anderes/Schiff');
+        $this->assertNull(ShipImages::ensure('retaliator'));
+        $this->installRsi(null, 200, 'media.robertsspaceindustries.com', null);
+        Db::run('UPDATE catalog_items SET image_checked_at = NULL');
+        $this->assertNull(ShipImages::ensure('retaliator'));
+        $this->assertSame([], glob($this->dir . '/ships/*') ?: []);
+    }
+
+    public function testShipWithoutStoreLinkMakesNoHttpCall(): void
+    {
+        Db::run("UPDATE catalog_items SET data = '{}'");
+        $this->installRsi();
+        $this->assertNull(ShipImages::ensure('retaliator'));
+        $this->assertSame([], $this->urls);
     }
 
     public function testHostAllowlist(): void
     {
-        $this->assertTrue(ShipImages::hostAllowed('https://storage.fltyrd.net/x'));
-        $this->assertFalse(ShipImages::hostAllowed('http://storage.fltyrd.net/x'));
-        $this->assertFalse(ShipImages::hostAllowed('https://storage.fltyrd.net.evil.test/x'));
-        $this->assertFalse(ShipImages::hostAllowed('https://evil.test/storage.fltyrd.net'));
+        $this->assertTrue(ShipImages::hostAllowed('https://media.robertsspaceindustries.com/x/slideshow.jpg'));
+        $this->assertFalse(ShipImages::hostAllowed('http://media.robertsspaceindustries.com/x'));
+        $this->assertFalse(ShipImages::hostAllowed('https://media.robertsspaceindustries.com.evil.test/x'));
+        $this->assertFalse(ShipImages::hostAllowed('https://evil.test/media.robertsspaceindustries.com'));
+        $this->assertFalse(ShipImages::hostAllowed('https://storage.fltyrd.net/x'));
         $this->assertSame($this->dir, Config::imageDir());
     }
 }

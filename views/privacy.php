@@ -55,10 +55,10 @@
   <h2 class="text-lg font-semibold text-zinc-100">Externe Datenquellen</h2>
   <p>
     Der Schiffskatalog stammt aus der öffentlichen Ship Matrix von Roberts Space Industries,
-    ergänzt um Angaben und Bilder von FleetYards sowie Rüstungsdaten und Beschreibungen aus der
+    ergänzt um Angaben von FleetYards sowie Rüstungsdaten und Beschreibungen aus der
     Star Citizen Wiki. Die Abrufe laufen auf dem Server der App und enthalten keine
-    Nutzerdaten. Schiffsbilder werden beim ersten Aufruf von FleetYards geladen und auf dem Server
-    zwischengespeichert.
+    Nutzerdaten. Schiffsbilder werden beim ersten Aufruf von Roberts Space Industries geladen und
+    auf dem Server zwischengespeichert.
   </p>
 
   <h2 class="text-lg font-semibold text-zinc-100">Löschung</h2>
