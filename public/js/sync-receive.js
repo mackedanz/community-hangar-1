@@ -147,7 +147,7 @@
     cancelAction = function () { stop(); opts.onCancel(); };
 
     if (embedded) {
-      waiting("RSI wurde in einem neuen Fenster geöffnet. Melde dich dort an (falls nötig) und klicke auf der Pledge-Seite in der Lesezeichenleiste auf „⇪ Hangar-Sync“. Hier erscheint dann die Vorschau.");
+      waiting("RSI wurde in einem neuen Tab geöffnet. Melde dich dort an (falls nötig) und klicke auf der Pledge-Seite in der Lesezeichenleiste auf „↻ Hangar-Sync“. Hier erscheint dann die Vorschau.");
     } else {
       message("Warte auf die Daten von der RSI-Seite … Das Lesezeichen liest gerade deine Pledges (unten rechts auf der RSI-Seite siehst du den Fortschritt).");
     }
@@ -161,7 +161,7 @@
       if (!exportData && !finished && source.closed) {
         stop();
         var wrap = el("div", "space-y-4");
-        wrap.appendChild(el("p", "text-zinc-300", "Das RSI-Fenster wurde geschlossen, bevor Daten übergeben wurden."));
+        wrap.appendChild(el("p", "text-zinc-300", "Der RSI-Tab wurde geschlossen, bevor Daten übergeben wurden."));
         wrap.appendChild(cancelBtn("Schließen"));
         show(wrap);
       }
@@ -196,14 +196,16 @@
     return;
   }
 
-  /* In der App: Knöpfe mit data-rsi-sync öffnen RSI in einem neuen Fenster, die Vorschau erscheint hier. */
+  /* In der App: RSI in einem neuen Tab öffnen, die Vorschau erscheint hier. */
   var RSI_WINDOW = "community-hangar-rsi-sync";
-  document.addEventListener("click", function (e) {
-    var btn = e.target.closest && e.target.closest("[data-rsi-sync]");
-    if (!btn) return;
-    var rsi = window.open(btn.href, RSI_WINDOW);
-    if (!rsi) return; /* blockiert: der Link öffnet sich normal im neuen Tab */
-    e.preventDefault();
+  var RSI_PLEDGES = RSI_ORIGIN + "/en/account/pledges";
+  var running = null;
+
+  function startSync(url) {
+    if (running) { running.focus(); }
+    var rsi = window.open(url, RSI_WINDOW);
+    if (!rsi) return false; /* blockiert */
+    if (running) return true;
 
     var overlay = el("div", "fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4");
     var box = el("div", "mt-16 w-full max-w-2xl space-y-4 rounded border border-zinc-700 bg-zinc-900 p-6 text-zinc-100");
@@ -212,12 +214,28 @@
     box.appendChild(panel);
     overlay.appendChild(box);
     document.body.appendChild(overlay);
+    running = overlay;
     receive(panel, rsi, {
       embedded: true,
       onCancel: function () {
         try { rsi.close(); } catch (err) { /* egal */ }
         overlay.remove();
+        running = null;
       },
     });
+    return true;
+  }
+
+  /* Das Lesezeichen ruft das auf, wenn es in der App angeklickt wird. */
+  window.communityHangarStartSync = function () {
+    if (!startSync(RSI_PLEDGES)) {
+      alert("Der neue Tab wurde vom Browser blockiert. Bitte Pop-ups für diese Seite erlauben und noch einmal klicken.");
+    }
+  };
+
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest("[data-rsi-sync]");
+    if (!btn) return;
+    if (startSync(btn.href)) e.preventDefault(); /* sonst öffnet der Link normal im neuen Tab */
   });
 })();

@@ -6,7 +6,6 @@
   <h1 class="text-2xl font-bold">Hangar von RSI übernehmen</h1>
   <?php if ($loggedIn): ?>
     <div id="receive" data-kind-labels="<?= e(json_encode($kindLabels, JSON_UNESCAPED_UNICODE)) ?>"></div>
-    <script src="/js/sync-receive.js" defer></script>
   <?php else: ?>
     <p class="text-zinc-300">
       Du bist im Community-Hangar nicht angemeldet. <a href="/login" class="text-indigo-400 hover:underline">Melde dich an</a>

@@ -90,5 +90,6 @@ $imprintUrl = \Hangar\Env::get('LEGAL_IMPRINT_URL');
   <?php endif; ?>
 </footer>
 <script src="/js/app.js" defer></script>
+<script src="/js/sync-receive.js" defer></script>
 </body>
 </html>

@@ -123,4 +123,3 @@ use Hangar\Http\View;
     </section>
   <?php endforeach; ?>
 </div>
-<script src="/js/sync-receive.js" defer></script>

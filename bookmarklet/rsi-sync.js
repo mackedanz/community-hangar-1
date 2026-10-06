@@ -90,10 +90,16 @@
 
   var APP_WINDOW = "community-hangar-rsi-sync";
 
+  if (location.origin === new URL(APP_URL).origin && typeof window.communityHangarStartSync === "function") {
+    /* Im Community-Hangar angeklickt: RSI im neuen Tab öffnen, die Vorschau erscheint in dieser Seite. */
+    window.communityHangarStartSync();
+    return;
+  }
+
   if (location.origin !== RSI_ORIGIN || !/\/account\/pledges/.test(location.pathname)) {
     /* Nicht die aktuelle Seite ersetzen: RSI in einem neuen Fenster öffnen. */
     if (!window.open(RSI_ORIGIN + "/en/account/pledges", "community-hangar-rsi")) {
-      alert("Das Fenster wurde vom Browser blockiert. Bitte Pop-ups erlauben und noch einmal klicken, oder deine RSI-Pledge-Seite selbst öffnen.");
+      alert("Der neue Tab wurde vom Browser blockiert. Bitte Pop-ups erlauben und noch einmal klicken, oder deine RSI-Pledge-Seite selbst öffnen.");
     }
     return;
   }
