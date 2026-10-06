@@ -3,6 +3,9 @@
 /** @var \Hangar\Viewer|null $viewer */
 /** @var bool $serverAdmin */
 /** @var string|null $csrf */
+/** @var bool|null $wide breiter Inhaltsbereich (Kachelraster); Logo und Navigation bleiben immer schmal */
+$wide = !empty($wide);
+$maxW = $wide ? 'max-w-[1800px]' : 'max-w-5xl';
 $viewer = $viewer ?? null;
 $serverAdmin = $serverAdmin ?? false;
 $csrf = $csrf ?? '';
@@ -69,7 +72,7 @@ $imprintUrl = \Hangar\Env::get('LEGAL_IMPRINT_URL');
     <?php endif; ?>
   </nav>
 </header>
-<main class="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
+<main class="mx-auto w-full <?= $maxW ?> flex-1 px-4 py-8">
   <?php if (!empty($flash)): ?>
     <p role="status" class="mb-6 rounded border p-3 text-sm <?= $flash['t'] === 'error' ? 'border-red-700 text-red-400' : 'border-green-700 text-green-400' ?>"><?= e($flash['m']) ?></p>
   <?php endif; ?>

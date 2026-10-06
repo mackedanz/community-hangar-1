@@ -59,6 +59,7 @@ final class CatalogController extends Controller
             'items' => $items, 'q' => $q, 'kind' => $kind, 'page' => $page,
             'pages' => max(1, (int) ceil($total / self::PAGE_SIZE)), 'total' => $total,
             'kinds' => self::CATALOG_KINDS,
+            'wide' => true,
         ], 'Katalog');
     }
 

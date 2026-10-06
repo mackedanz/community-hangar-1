@@ -2,6 +2,16 @@
 @source "../views";
 @source "../public/js";
 
+/* Zusätzlicher Breakpoint für die breiten Kachelseiten (Inhalt bis 1800 px). */
+@theme {
+  --breakpoint-3xl: 112.5rem;
+}
+
+/* Platz für den Rollbalken immer freihalten, damit zentrierter Inhalt zwischen kurzen und langen Seiten nicht springt. */
+html {
+  scrollbar-gutter: stable;
+}
+
 :root {
   --background: #0a0a0a;
   --foreground: #ededed;

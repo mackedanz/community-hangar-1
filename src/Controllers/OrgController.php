@@ -30,7 +30,7 @@ final class OrgController extends Controller
     public static function orgPage(array $org, string $view, array $data, string $title, string $active): Response
     {
         $inner = View::render($view, $data + ['org' => $org], null);
-        return self::page('org_frame', ['org' => $org, 'inner' => $inner, 'active' => $active], $title . ' · ' . $org['name']);
+        return self::page('org_frame', ['org' => $org, 'inner' => $inner, 'active' => $active, 'wide' => $active === 'hangar'], $title . ' · ' . $org['name']);
     }
 
     private static function errorMessage(\Throwable $e): string

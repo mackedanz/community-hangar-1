@@ -37,7 +37,7 @@ $pageLink = 'rounded border border-cyan-800/60 bg-teal-950/50 px-3 py-1.5 hover:
   <?php if (!$items): ?>
     <p class="text-zinc-400">Nichts gefunden. Ist der Katalog synchronisiert? (<code>php bin/catalog-sync.php</code>)</p>
   <?php else: ?>
-    <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+    <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8">
       <?php foreach ($items as $item): ?>
         <?= View::partial('partials/item_tile', [
           'name' => $item['name'],

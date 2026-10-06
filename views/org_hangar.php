@@ -53,7 +53,7 @@ $input = 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm';
   <?php elseif (!$entries): ?>
     <p class="text-zinc-400">Noch keine Schiffe in der Orga. <a href="/sync" class="text-indigo-400 hover:underline">Synchronisiere deinen Hangar mit RSI</a>.</p>
   <?php else: ?>
-    <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+    <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8">
       <?php foreach ($entries as $en): ?>
         <?= View::partial('partials/item_tile', [
           'name' => $en['name'],

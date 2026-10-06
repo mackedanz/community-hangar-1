@@ -29,6 +29,7 @@ final class HangarController extends Controller
             'lastSync' => Community::getLastSync($viewer->id),
             'term' => $term,
             'results' => $term !== '' ? Hangar::searchCatalog($term) : [],
+            'wide' => true,
         ], 'Mein Hangar');
     }
 

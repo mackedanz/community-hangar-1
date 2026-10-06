@@ -2,6 +2,7 @@
 /** @var array{id:string,slug:string,name:string,iconUrl:?string,role:string,canPlan:bool} $org */
 /** @var string $inner */
 /** @var string $active */
+/** @var bool|null $wide */
 use Hangar\Http\View;
 
 $base = '/o/' . $org['slug'];
@@ -17,7 +18,7 @@ if ($org['role'] === 'ADMIN') {
 }
 ?>
 <div class="space-y-6">
-  <div class="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-zinc-800 pb-3">
+  <div class="<?= !empty($wide) ? 'mx-auto max-w-[992px] ' : '' ?>flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-zinc-800 pb-3">
     <a href="<?= e($base) ?>" class="flex items-center gap-2 text-lg font-semibold">
       <?= View::partial('partials/org_icon', ['name' => $org['name'], 'iconUrl' => $org['iconUrl'], 'size' => 'h-8 w-8']) ?>
       <?= e($org['name']) ?>
