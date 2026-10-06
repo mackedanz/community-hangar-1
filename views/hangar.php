@@ -23,11 +23,11 @@ use Hangar\Http\View;
           <a href="/hangar/export?format=csv" class="text-indigo-400 hover:underline">CSV</a>
         </span>
       <?php endif; ?>
-      <a href="<?= e(Constants::RSI_PLEDGES_URL) ?>" target="_blank" rel="noopener noreferrer" class="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium hover:bg-indigo-500">Jetzt synchronisieren</a>
+      <a href="<?= e(Constants::RSI_PLEDGES_URL) ?>" target="_blank" rel="noopener noreferrer" data-rsi-sync class="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium hover:bg-indigo-500">Jetzt synchronisieren</a>
     </div>
   </div>
 
-  <section class="space-y-3 rounded border border-zinc-800 p-4">
+  <section class="max-w-5xl space-y-3 rounded border border-zinc-800 p-4">
     <h2 class="font-semibold">Manuell hinzufügen</h2>
     <p class="text-sm text-zinc-400">
       Für Schiffe, die nicht über RSI kommen (z. B. im Spiel gekauft oder geliehen). Manuelle
@@ -93,7 +93,7 @@ use Hangar\Http\View;
         </div>
       </div>
       <div id="sec-<?= e($kind) ?>">
-        <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+        <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8">
           <?php foreach ($list as $entry):
             $c = $entry['catalogItem'];
             $i = $entry['info'];
@@ -123,3 +123,4 @@ use Hangar\Http\View;
     </section>
   <?php endforeach; ?>
 </div>
+<script src="/js/sync-receive.js" defer></script>

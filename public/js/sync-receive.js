@@ -4,7 +4,6 @@
 
   var RSI_ORIGIN = "https://robertsspaceindustries.com";
   var root = document.getElementById("receive");
-  if (!root) return;
   var kindLabels = {};
   try {
     kindLabels = JSON.parse(root.getAttribute("data-kind-labels") || "{}");
@@ -12,6 +11,8 @@
     kindLabels = {};
   }
   var exportData = null;
+  var done = function () {};
+  var cancelAction = function () { window.close(); };
 
   function el(tag, cls, text) {
     var n = document.createElement(tag);
@@ -40,16 +41,6 @@
         return body.plan;
       });
     });
-  }
-
-  function done(plan) {
-    var total = plan.matched.length + plan.unmatched.length + plan.others.length;
-    var a = el("a", "inline-block rounded bg-indigo-600 px-4 py-2 font-medium hover:bg-indigo-500", "Zu meinem Hangar");
-    a.href = "/hangar";
-    var wrap = el("div", "space-y-3");
-    wrap.appendChild(el("p", "text-green-400", "Fertig: " + total + " Einträge in deinem Hangar."));
-    wrap.appendChild(a);
-    show(wrap);
   }
 
   function preview(plan) {
@@ -103,36 +94,130 @@
     });
     var cancel = el("button", "rounded bg-zinc-800 px-4 py-2 hover:bg-zinc-700", "Abbrechen");
     cancel.type = "button";
-    cancel.addEventListener("click", function () { window.close(); });
+    cancel.addEventListener("click", function () { cancelAction(); });
     buttons.appendChild(apply);
     buttons.appendChild(cancel);
     wrap.appendChild(buttons);
     show(wrap);
   }
 
-  var opener = window.opener;
-  if (!opener) {
-    message("Diese Seite wird vom Lesezeichen „Hangar-Sync“ auf deiner RSI-Pledge-Seite geöffnet. Starte den Sync bitte dort.", "text-red-400");
+  /*
+   * Empfang starten. source = das Fenster mit der RSI-Seite (Opener auf der Empfangsseite bzw. das von der App
+   * geöffnete RSI-Fenster). opts.embedded: Panel in der App-Seite statt eigenem Fenster.
+   */
+  function receive(rootEl, source, opts) {
+    root = rootEl;
+    exportData = null;
+    var embedded = !!opts.embedded;
+    var finished = false;
+
+    var cancelBtn = function (label) {
+      var c = el("button", "rounded bg-zinc-800 px-4 py-2 hover:bg-zinc-700", label || "Abbrechen");
+      c.type = "button";
+      c.addEventListener("click", function () { stop(); opts.onCancel(); });
+      return c;
+    };
+    function waiting(text) {
+      var wrap = el("div", "space-y-4");
+      wrap.appendChild(el("p", "text-zinc-300", text));
+      wrap.appendChild(cancelBtn());
+      show(wrap);
+    }
+    function stop() {
+      finished = true;
+      clearInterval(ping);
+      clearInterval(watch);
+    }
+
+    done = function (plan) {
+      stop();
+      var total = plan.matched.length + plan.unmatched.length + plan.others.length;
+      var wrap = el("div", "space-y-3");
+      wrap.appendChild(el("p", "text-green-400", "Fertig: " + total + " Einträge in deinem Hangar."));
+      if (embedded) {
+        wrap.appendChild(el("p", "text-sm text-zinc-400", "Die Seite wird neu geladen …"));
+        setTimeout(function () { location.href = "/hangar"; }, 1200);
+      } else {
+        var a = el("a", "inline-block rounded bg-indigo-600 px-4 py-2 font-medium hover:bg-indigo-500", "Zu meinem Hangar");
+        a.href = "/hangar";
+        wrap.appendChild(a);
+      }
+      show(wrap);
+    };
+    cancelAction = function () { stop(); opts.onCancel(); };
+
+    if (embedded) {
+      waiting("RSI wurde in einem neuen Fenster geöffnet. Melde dich dort an (falls nötig) und klicke auf der Pledge-Seite in der Lesezeichenleiste auf „⇪ Hangar-Sync“. Hier erscheint dann die Vorschau.");
+    } else {
+      message("Warte auf die Daten von der RSI-Seite … Das Lesezeichen liest gerade deine Pledges (unten rechts auf der RSI-Seite siehst du den Fortschritt).");
+    }
+
+    /* "Bereit" melden, bis die Daten da sind (das Lesezeichen liest die Seiten erst noch). */
+    var ping = setInterval(function () {
+      try { source.postMessage({ type: "ch-ready" }, RSI_ORIGIN); } catch (e) { /* Fenster weg */ }
+    }, 500);
+    /* Wird das RSI-Fenster vor der Übergabe geschlossen, nicht ewig warten. */
+    var watch = setInterval(function () {
+      if (!exportData && !finished && source.closed) {
+        stop();
+        var wrap = el("div", "space-y-4");
+        wrap.appendChild(el("p", "text-zinc-300", "Das RSI-Fenster wurde geschlossen, bevor Daten übergeben wurden."));
+        wrap.appendChild(cancelBtn("Schließen"));
+        show(wrap);
+      }
+    }, 1000);
+
+    window.addEventListener("message", function onMsg(event) {
+      if (event.origin !== RSI_ORIGIN || event.source !== source) return;
+      if (!event.data || event.data.type !== "ch-export" || exportData) return;
+      window.removeEventListener("message", onMsg);
+      clearInterval(ping);
+      exportData = event.data.data;
+      source.postMessage({ type: "ch-received" }, RSI_ORIGIN);
+      if (embedded) {
+        /* Das RSI-Fenster hat seine Aufgabe erledigt; kurz warten, damit es die Quittung noch sieht. */
+        setTimeout(function () { try { source.close(); } catch (e) { /* egal */ } window.focus(); }, 400);
+      }
+
+      message("Daten erhalten, gleiche mit dem Katalog ab …");
+      sendImport(exportData, true).then(preview, function (err) {
+        message(err.message, "text-red-400");
+      });
+    });
+  }
+
+  /* Eigenes Fenster (vom Lesezeichen geöffnet): Opener ist die RSI-Seite. */
+  if (root) {
+    if (!window.opener) {
+      message("Diese Seite wird vom Lesezeichen „Hangar-Sync“ auf deiner RSI-Pledge-Seite geöffnet. Starte den Sync bitte dort.", "text-red-400");
+    } else {
+      receive(root, window.opener, { embedded: false, onCancel: function () { window.close(); } });
+    }
     return;
   }
 
-  message("Warte auf die Daten von der RSI-Seite … Das Lesezeichen liest gerade deine Pledges (unten rechts auf der RSI-Seite siehst du den Fortschritt).");
+  /* In der App: Knöpfe mit data-rsi-sync öffnen RSI in einem neuen Fenster, die Vorschau erscheint hier. */
+  var RSI_WINDOW = "community-hangar-rsi-sync";
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest("[data-rsi-sync]");
+    if (!btn) return;
+    var rsi = window.open(btn.href, RSI_WINDOW);
+    if (!rsi) return; /* blockiert: der Link öffnet sich normal im neuen Tab */
+    e.preventDefault();
 
-  /* "Bereit" melden, bis die Daten da sind (das Lesezeichen liest die Seiten erst noch). */
-  var ping = setInterval(function () {
-    try { opener.postMessage({ type: "ch-ready" }, RSI_ORIGIN); } catch (e) { /* Opener weg */ }
-  }, 500);
-
-  window.addEventListener("message", function (event) {
-    if (event.origin !== RSI_ORIGIN || event.source !== opener) return;
-    if (!event.data || event.data.type !== "ch-export" || exportData) return;
-    clearInterval(ping);
-    exportData = event.data.data;
-    opener.postMessage({ type: "ch-received" }, RSI_ORIGIN);
-
-    message("Daten erhalten, gleiche mit dem Katalog ab …");
-    sendImport(exportData, true).then(preview, function (err) {
-      message(err.message, "text-red-400");
+    var overlay = el("div", "fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4");
+    var box = el("div", "mt-16 w-full max-w-2xl space-y-4 rounded border border-zinc-700 bg-zinc-900 p-6 text-zinc-100");
+    box.appendChild(el("h2", "text-xl font-bold", "Hangar von RSI übernehmen"));
+    var panel = el("div");
+    box.appendChild(panel);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    receive(panel, rsi, {
+      embedded: true,
+      onCancel: function () {
+        try { rsi.close(); } catch (err) { /* egal */ }
+        overlay.remove();
+      },
     });
   });
 })();

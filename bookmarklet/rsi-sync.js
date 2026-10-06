@@ -88,9 +88,12 @@
 
   /* ---------- Ablauf auf der RSI-Seite ---------- */
 
+  var APP_WINDOW = "community-hangar-rsi-sync";
+
   if (location.origin !== RSI_ORIGIN || !/\/account\/pledges/.test(location.pathname)) {
-    if (confirm("Der Community-Hangar-Sync funktioniert nur auf deiner RSI-Pledge-Seite. Jetzt dorthin wechseln? Danach das Lesezeichen noch einmal anklicken.")) {
-      location.href = RSI_ORIGIN + "/en/account/pledges";
+    /* Nicht die aktuelle Seite ersetzen: RSI in einem neuen Fenster öffnen. */
+    if (!window.open(RSI_ORIGIN + "/en/account/pledges", "community-hangar-rsi")) {
+      alert("Das Fenster wurde vom Browser blockiert. Bitte Pop-ups erlauben und noch einmal klicken, oder deine RSI-Pledge-Seite selbst öffnen.");
     }
     return;
   }
@@ -99,7 +102,15 @@
 
   /* Das Fenster sofort öffnen, solange der Klick noch "frisch" ist; sonst blockiert der Browser es. */
   var appOrigin = new URL(APP_URL).origin;
-  var win = window.open(APP_URL + "/sync/receive", "community-hangar-sync");
+  /* Hat der Community-Hangar dieses RSI-Fenster selbst geöffnet, geht die Übergabe an seinen Tab zurück. */
+  var win = null;
+  try {
+    if (window.name === APP_WINDOW && window.opener && !window.opener.closed) win = window.opener;
+  } catch (e) {
+    win = null;
+  }
+  var viaOpener = !!win;
+  if (!win) win = window.open(APP_URL + "/sync/receive", "community-hangar-sync");
 
   var box = document.createElement("div");
   box.style.cssText =
@@ -190,9 +201,9 @@
       });
     })
     .then(function (count) {
-      finish(count + " Pledges übergeben. Bitte im Fenster des Community-Hangars bestätigen.", 15000);
+      finish(count + " Pledges übergeben. Bitte im Community-Hangar bestätigen.", 15000);
       try {
-        win.focus();
+        if (!viaOpener) win.focus();
       } catch (e) {
         /* manche Browser erlauben das nicht */
       }

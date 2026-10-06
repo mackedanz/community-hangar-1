@@ -37,15 +37,16 @@ $kbd = 'rounded bg-zinc-800 px-1.5 py-0.5';
   <section class="space-y-3">
     <h2 class="text-lg font-semibold">Synchronisieren</h2>
     <ol class="list-decimal space-y-2 pl-5 text-sm text-zinc-300">
-      <li>Melde dich auf RSI an und öffne <a href="<?= e(Constants::RSI_PLEDGES_URL) ?>" target="_blank" rel="noopener noreferrer" class="<?= $link ?>">deine Pledge-Seite</a>.</li>
-      <li>Klicke dort in der Lesezeichenleiste auf <b>„⇪ Hangar-Sync“</b>. Unten rechts siehst du, wie die Seiten gelesen werden, und es öffnet sich ein Fenster des Community-Hangars.</li>
-      <li>Im Community-Hangar-Fenster erscheint eine Vorschau. Prüfe sie und klicke auf <b>„In meinen Hangar übernehmen“</b>.</li>
+      <li>Klicke auf „RSI-Pledge-Seite öffnen“ (öffnet ein neues Fenster) oder öffne <a href="<?= e(Constants::RSI_PLEDGES_URL) ?>" target="_blank" rel="noopener noreferrer" data-rsi-sync class="<?= $link ?>">deine Pledge-Seite</a>.</li>
+      <li>Klicke dort in der Lesezeichenleiste auf <b>„⇪ Hangar-Sync“</b>. Unten rechts siehst du, wie die Seiten gelesen werden.</li>
+      <li>Im Community-Hangar erscheint eine Vorschau, und das RSI-Fenster schließt sich. Prüfe sie und klicke auf <b>„In meinen Hangar übernehmen“</b>.</li>
     </ol>
     <p class="text-xs text-zinc-400">
       Meldet der Browser ein blockiertes Pop-up, erlaube Pop-ups für robertsspaceindustries.com
       (Symbol rechts in der Adressleiste) und klicke das Lesezeichen erneut an.
     </p>
-    <a href="<?= e(Constants::RSI_PLEDGES_URL) ?>" target="_blank" rel="noopener noreferrer" class="inline-block rounded bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500">RSI-Pledge-Seite öffnen</a>
+    <a href="<?= e(Constants::RSI_PLEDGES_URL) ?>" target="_blank" rel="noopener noreferrer" data-rsi-sync class="inline-block rounded bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500">RSI-Pledge-Seite öffnen</a>
+    <script src="/js/sync-receive.js" defer></script>
   </section>
 
   <p class="text-xs text-zinc-500">
