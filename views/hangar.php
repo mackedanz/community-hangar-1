@@ -56,13 +56,12 @@ use Hangar\Http\View;
   </section>
 
   <?php if ($entries): ?>
-    <form method="get" action="/hangar" class="flex flex-wrap items-center gap-2">
-      <input type="search" name="q" value="<?= e($q) ?>" maxlength="100" placeholder="Im Hangar suchen: Name, Hersteller, Rolle, LTI …" class="w-full max-w-sm rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm">
-      <button class="rounded bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700">Suchen</button>
-      <?php if ($q !== ''): ?><a href="/hangar" class="text-sm text-zinc-400 hover:underline">Zurücksetzen</a><?php endif; ?>
-    </form>
-    <?php if ($q !== '' && !$groups): ?>
-      <p class="text-zinc-400">Nichts im Hangar gefunden für „<?= e($q) ?>“.</p>
+    <?= View::partial('partials/fleet_filter', [
+      'action' => '/hangar', 'filter' => $filter, 'q' => $q, 'options' => $options,
+      'placeholder' => 'Name, Hersteller, Rolle, LTI …',
+    ]) ?>
+    <?php if ($filtering && !$groups): ?>
+      <p class="text-zinc-400">Nichts im Hangar passt zu diesen Filtern.</p>
     <?php endif; ?>
   <?php endif; ?>
 

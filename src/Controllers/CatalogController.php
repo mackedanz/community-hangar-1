@@ -41,11 +41,31 @@ final class CatalogController extends Controller
             $where .= ' AND (match_key LIKE ? OR alt_match_key LIKE ?)';
             array_push($params, $like, $like);
         }
-        $total = (int) Db::val("SELECT COUNT(*) FROM catalog_items WHERE $where", $params);
-        $items = Db::all(
-            "SELECT id, kind, slug, name, manufacturer, image_url, data FROM catalog_items WHERE $where ORDER BY name ASC LIMIT " . self::PAGE_SIZE . ' OFFSET ' . (($page - 1) * self::PAGE_SIZE),
-            $params,
-        );
+        $filter = $kind === 'SHIP' ? FleetFilter::parseFilter($req->query) : [];
+        $specFilter = array_diff_key($filter, ['q' => 1]);
+        $options = [];
+        if ($kind === 'SHIP') {
+            $options = FleetFilter::options(array_map(
+                fn ($r) => FleetFilter::parseSpecs($r['data']),
+                Db::all('SELECT data FROM catalog_items WHERE kind = ?', ['SHIP']),
+            ));
+        }
+        $cols = 'id, kind, slug, name, manufacturer, image_url, data';
+        if ($specFilter !== []) {
+            // Spezifikationen stehen als JSON in der Spalte data; bei aktivem Filter wird in PHP gefiltert und geteilt.
+            $matching = array_values(array_filter(
+                Db::all("SELECT $cols FROM catalog_items WHERE $where ORDER BY name ASC", $params),
+                fn ($r) => FleetFilter::matches(FleetFilter::parseSpecs($r['data']), $specFilter),
+            ));
+            $total = count($matching);
+            $items = array_slice($matching, ($page - 1) * self::PAGE_SIZE, self::PAGE_SIZE);
+        } else {
+            $total = (int) Db::val("SELECT COUNT(*) FROM catalog_items WHERE $where", $params);
+            $items = Db::all(
+                "SELECT $cols FROM catalog_items WHERE $where ORDER BY name ASC LIMIT " . self::PAGE_SIZE . ' OFFSET ' . (($page - 1) * self::PAGE_SIZE),
+                $params,
+            );
+        }
         foreach ($items as &$i) {
             $i['imageSrc'] = Community::imageSrc($i['kind'], $i['slug'], $i['image_url']);
             $specs = FleetFilter::parseSpecs($i['data']);
@@ -58,7 +78,7 @@ final class CatalogController extends Controller
         return self::page('catalog', [
             'items' => $items, 'q' => $q, 'kind' => $kind, 'page' => $page,
             'pages' => max(1, (int) ceil($total / self::PAGE_SIZE)), 'total' => $total,
-            'kinds' => self::CATALOG_KINDS,
+            'kinds' => self::CATALOG_KINDS, 'filter' => $specFilter, 'options' => $options,
             'wide' => true,
         ], 'Katalog');
     }

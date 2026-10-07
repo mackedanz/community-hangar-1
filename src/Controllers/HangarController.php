@@ -7,6 +7,7 @@ namespace Hangar\Controllers;
 use Hangar\Auth;
 use Hangar\Community;
 use Hangar\Constants;
+use Hangar\FleetFilter;
 use Hangar\Hangar;
 use Hangar\HangarError;
 use Hangar\Http\Flash;
@@ -21,10 +22,17 @@ final class HangarController extends Controller
         $term = trim((string) $req->query('add', ''));
         $q = mb_substr(trim((string) $req->query('q', '')), 0, 100);
         $entries = Hangar::listHangar($viewer->id);
-        $shown = $q === '' ? $entries : array_values(array_filter($entries, fn ($e) => Hangar::matchesText($e, $q)));
+        $filter = FleetFilter::parseFilter($req->query);
+        $options = FleetFilter::options(array_filter(array_map(
+            fn ($e) => $e['kind'] === 'SHIP' ? FleetFilter::parseSpecs($e['catalogItem']['data'] ?? null) : null,
+            $entries,
+        )));
+        $specFilter = array_diff_key($filter, ['q' => 1]);
+        $shown = array_values(array_filter($entries, fn ($e) => ($q === '' || Hangar::matchesText($e, $q))
+            && ($specFilter === [] || FleetFilter::matches(FleetFilter::parseSpecs($e['catalogItem']['data'] ?? null), $specFilter))));
         return self::page('hangar', [
             'entries' => $entries,
-            'q' => $q,
+            'q' => $q, 'filter' => $filter, 'options' => $options, 'filtering' => $q !== '' || $specFilter !== [],
             'groups' => Hangar::groupByKind($shown),
             'lastSync' => Community::getLastSync($viewer->id),
             'term' => $term,

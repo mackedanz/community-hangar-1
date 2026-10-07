@@ -9,7 +9,9 @@
 use Hangar\Constants;
 use Hangar\Http\View;
 
-$href = fn (array $over) => '/catalog?' . http_build_query(array_filter(['kind' => $kind, 'q' => $q] + $over, fn ($v) => $v !== ''));
+/** @var array<string,mixed> $filter */
+/** @var array<string,list<string>> $options */
+$href = fn (array $over) => '/catalog?' . http_build_query(array_filter(['kind' => $kind, 'q' => $q] + $filter + $over, fn ($v) => $v !== ''));
 $pageLink = 'rounded border border-cyan-800/60 bg-teal-950/50 px-3 py-1.5 hover:border-cyan-500/80';
 ?>
 <div class="space-y-6">
@@ -18,21 +20,20 @@ $pageLink = 'rounded border border-cyan-800/60 bg-teal-950/50 px-3 py-1.5 hover:
       <h1 class="text-2xl font-bold">Katalog</h1>
       <p class="text-sm text-zinc-400"><?= (int) $total ?> Treffer<?= $q !== '' ? ' für „' . e($q) . '“' : '' ?></p>
     </div>
-    <form class="flex gap-2" method="get" action="/catalog">
-      <input type="hidden" name="kind" value="<?= e($kind) ?>">
-      <input name="q" value="<?= e($q) ?>" placeholder="Suchen…" class="w-48 rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm sm:w-64">
-      <button class="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500">Suchen</button>
-      <?php if ($q !== ''): ?><a href="/catalog?kind=<?= e($kind) ?>" class="self-center text-sm text-zinc-400 hover:underline">Zurücksetzen</a><?php endif; ?>
-    </form>
   </div>
 
   <div class="flex flex-wrap items-center gap-2">
     <?php foreach ($kinds as $k): ?>
-      <a href="/catalog?kind=<?= e($k) ?><?= $q !== '' ? '&amp;q=' . e(rawurlencode($q)) : '' ?>"
+      <a href="/catalog?kind=<?= e($k) ?>"
          class="rounded border px-3 py-1.5 text-sm <?= $k === $kind ? 'border-cyan-500/80 bg-teal-900/60 text-zinc-100' : 'border-cyan-800/60 bg-teal-950/50 text-zinc-300 hover:border-cyan-500/80' ?>"
          <?= $k === $kind ? 'aria-current="page"' : '' ?>><?= e(Constants::KIND_LABELS[$k]) ?></a>
     <?php endforeach; ?>
   </div>
+
+  <?= View::partial('partials/fleet_filter', [
+    'action' => '/catalog', 'filter' => $filter, 'q' => $q, 'options' => $options, 'hidden' => ['kind' => $kind],
+    'specs' => $kind === 'SHIP', 'placeholder' => 'Name oder Hersteller …',
+  ]) ?>
 
   <?php if (!$items): ?>
     <p class="text-zinc-400">Nichts gefunden. Ist der Katalog synchronisiert? (<code>php bin/catalog-sync.php</code>)</p>
