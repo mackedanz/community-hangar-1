@@ -77,6 +77,7 @@ final class App
         $r->post('/orgs/update', [OrgController::class, 'update']);
         $r->post('/orgs/delete', [OrgController::class, 'delete']);
         $r->post('/orgs/sync-allowlist', [OrgController::class, 'syncAllowlist']);
+        $r->post('/orgs/rsi', [OrgController::class, 'saveRsi']);
         $r->get('/o/{slug}', [OrgController::class, 'home']);
         $r->get('/o/{slug}/members', [OrgController::class, 'members']);
         $r->get('/o/{slug}/hangar', [OrgController::class, 'hangar']);

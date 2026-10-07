@@ -64,6 +64,31 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2';
   <?php endif; ?>
 
   <section class="space-y-3 border-t border-zinc-800 pt-6">
+    <h2 class="text-lg font-semibold">RSI-Orga</h2>
+    <p class="text-sm text-zinc-400">
+      Mit dem Kürzel deiner Orga auf RSI (z. B. <b>EXPG</b>, steht in der Adresse robertsspaceindustries.com/orgs/<b>EXPG</b>)
+      färbt die App in der Mitgliederliste den Rahmen jedes Mitglieds nach seiner Zugehörigkeit zur RSI-Orga. Der RSI-Handle
+      wird aus dem Server-Nickname abgeleitet (ein Zusatz in Klammern am Ende wird ignoriert). Es werden nur öffentliche Daten
+      gelesen; die Liste wird täglich aktualisiert. Leer lassen und speichern trennt die Verbindung.
+    </p>
+    <form method="post" action="/orgs/rsi" class="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+      <input type="hidden" name="orgId" value="<?= e($full['id']) ?>">
+      <label class="space-y-1">
+        <span class="block text-sm text-zinc-400">RSI-Kürzel</span>
+        <input name="rsiSid" maxlength="20" value="<?= e($full['rsi_sid'] ?? '') ?>" placeholder="EXPG" class="w-40 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 uppercase">
+      </label>
+      <button class="rounded border border-zinc-600 px-3 py-2 text-sm hover:bg-zinc-800">Speichern und abgleichen</button>
+    </form>
+    <?php if (!empty($full['rsi_sid'])): ?>
+      <p class="text-xs text-zinc-500">
+        Verbunden mit <b class="text-zinc-300"><?= e($full['rsi_org_name'] ?? $full['rsi_sid']) ?></b>:
+        <?= (int) $rsiRoster ?> sichtbare Mitglieder, <?= (int) $full['rsi_redacted'] ?> mit verborgener Zugehörigkeit<?= !empty($full['rsi_synced_at']) ? '; Stand ' . e(dt(\Hangar\Time::parse($full['rsi_synced_at']))) : '; noch nicht abgeglichen' ?>.
+      </p>
+    <?php endif; ?>
+  </section>
+
+  <section class="space-y-3 border-t border-zinc-800 pt-6">
     <h2 class="text-lg font-semibold text-red-400">Orga löschen</h2>
     <p class="text-sm text-zinc-400">
       Entfernt die Orga und alle Mitgliedschaften aus der App. Konten und Hangars der

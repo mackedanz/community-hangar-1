@@ -19,6 +19,7 @@ use Hangar\Onboarding;
 use Hangar\OrgError;
 use Hangar\Orgs;
 use Hangar\OrgStats;
+use Hangar\RsiOrg;
 
 final class OrgController extends Controller
 {
@@ -116,6 +117,7 @@ final class OrgController extends Controller
             'allowed' => Db::all('SELECT discord_id, name, avatar_url, fixed FROM org_allowed_members WHERE org_id = ? ORDER BY name ASC', [$org['id']]),
             'botReady' => \Hangar\DiscordBot::configured(),
             'gate' => Onboarding::gateEnabled(),
+            'rsiRoster' => (int) Db::val('SELECT COUNT(*) FROM org_rsi_members WHERE org_id = ?', [$org['id']]),
         ], 'Orga verwalten', 'settings');
     }
 
@@ -152,6 +154,25 @@ final class OrgController extends Controller
         return Flash::ok("/o/$slug/settings", "Zugangsliste abgeglichen: {$r['total']} Mitglieder (+{$r['added']}, −{$r['removed']}).");
     }
 
+    /** RSI-Kürzel der Orga speichern (leer = trennen) und die Mitgliederliste sofort abgleichen. */
+    public static function saveRsi(Request $req): Response
+    {
+        $viewer = Auth::requireViewer($req);
+        $orgId = (string) $req->input('orgId', '');
+        $slug = (string) Db::val('SELECT slug FROM organizations WHERE id = ?', [$orgId]);
+        try {
+            Orgs::requireOrgAdmin($viewer->id, $orgId);
+            $name = RsiOrg::connect($orgId, (string) $req->input('rsiSid', ''));
+            if ($name === null) {
+                return Flash::ok("/o/$slug/settings", 'RSI-Orga getrennt.');
+            }
+            $r = RsiOrg::sync($orgId);
+        } catch (\Throwable $e) {
+            return Flash::error("/o/$slug/settings", self::errorMessage($e));
+        }
+        return Flash::ok("/o/$slug/settings", "RSI-Orga „$name“ verbunden: {$r['members']} sichtbare Mitglieder, {$r['redacted']} verborgen.");
+    }
+
     public static function delete(Request $req): Response
     {
         $viewer = Auth::requireViewer($req);
@@ -179,7 +200,10 @@ final class OrgController extends Controller
     public static function members(Request $req, array $p): Response
     {
         [$viewer, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
-        return self::orgPage($org, 'org_members', ['members' => Community::listMembers($org['id'], $viewer)], 'Mitglieder', 'members');
+        return self::orgPage($org, 'org_members', [
+            'members' => Community::listMembers($org['id'], $viewer),
+            'rsiOrgName' => Db::val('SELECT rsi_org_name FROM organizations WHERE id = ?', [$org['id']]),
+        ], 'Mitglieder', 'members');
     }
 
     public static function hangar(Request $req, array $p): Response

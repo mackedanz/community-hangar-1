@@ -52,4 +52,13 @@ php /var/www/html/bin/migrate.php
   done
 ) &
 
+# Mitgliederlisten der RSI-Orgas täglich abgleichen (nur Orgas mit hinterlegtem RSI-Kürzel).
+(
+  sleep 90
+  while true; do
+    su -s /bin/sh www-data -c "php /var/www/html/bin/rsi-sync.php" || echo "RSI-Abgleich fehlgeschlagen." >&2
+    sleep "${RSI_SYNC_INTERVAL_SECONDS:-86400}"
+  done
+) &
+
 exec "$@"

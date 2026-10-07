@@ -15,6 +15,7 @@ use Hangar\Http\Response;
 use Hangar\OrgError;
 use Hangar\Orgs;
 use Hangar\Onboarding;
+use Hangar\RsiOrg;
 use Hangar\Time;
 
 /**
@@ -69,7 +70,7 @@ final class DiscordController extends Controller
         try {
             $org = Onboarding::ensureOrg($guildId, $invokerId, $invokerName);
             if ($type === self::COMMAND) {
-                return self::panel($org, self::REPLY, null);
+                return self::setupCommand($org, $i);
             }
             return self::component($org, $i);
         } catch (OrgError $e) {
@@ -119,6 +120,47 @@ final class DiscordController extends Controller
                 $note = 'Abgleich nicht möglich: ' . $e->getMessage();
             }
             DiscordBot::editOriginal($token, ['content' => $note, 'allowed_mentions' => ['parse' => []]]);
+        });
+        return $res;
+    }
+
+    /**
+     * /einrichten, optional mit dem RSI-Kürzel der Orga: wird sofort geprüft (nur Seite 1 der Mitgliederliste),
+     * der volle Abgleich läuft danach im Hintergrund und aktualisiert die Nachricht.
+     * @param array<string,mixed> $org @param array<string,mixed> $i
+     */
+    private static function setupCommand(array $org, array $i): Response
+    {
+        $sid = null;
+        foreach ((array) ($i['data']['options'] ?? []) as $opt) {
+            if (is_array($opt) && ($opt['name'] ?? '') === 'rsi_kuerzel') {
+                $sid = trim((string) ($opt['value'] ?? ''));
+            }
+        }
+        if ($sid === null || $sid === '') {
+            return self::panel($org, self::REPLY, null);
+        }
+        try {
+            $name = RsiOrg::connect((string) $org['id'], $sid);
+        } catch (OrgError $e) {
+            return self::panel($org, self::REPLY, 'RSI-Orga nicht übernommen: ' . $e->getMessage());
+        }
+        $org = Orgs::find((string) $org['id']) ?? $org;
+        $res = self::panel($org, self::REPLY, "RSI-Orga „$name“ verbunden, die Mitgliederliste wird abgeglichen …");
+        $orgId = (string) $org['id'];
+        $token = (string) ($i['token'] ?? '');
+        // Der Abgleich dauert einige Sekunden (eine Abfrage je 32 Mitglieder), Discord lässt aber nur 3 Sekunden für die Antwort.
+        $res->afterSend(static function () use ($orgId, $token, $name): void {
+            try {
+                $r = RsiOrg::sync($orgId);
+                $note = "RSI-Orga „$name“ verbunden: {$r['members']} sichtbare Mitglieder, {$r['redacted']} verborgen.";
+            } catch (OrgError $e) {
+                $note = 'RSI-Abgleich nicht möglich: ' . $e->getMessage();
+            }
+            $o = Orgs::find($orgId);
+            if ($o !== null) {
+                DiscordBot::editOriginal($token, self::panelData($o, $note));
+            }
         });
         return $res;
     }
@@ -191,7 +233,9 @@ final class DiscordController extends Controller
         $names = static fn (array $ids): string => $ids === [] ? '–' : implode(', ', array_map(static fn (string $id): string => $labels[$id] ?? "<@&$id>", $ids));
         $text = "**Community-Hangar: {$org['name']}**\n"
             . "Dürfen das Tool nutzen: {$names($use)}\n"
-            . "Dürfen Events planen: {$names($plan)}\n\n"
+            . "Dürfen Events planen: {$names($plan)}\n"
+            . (!empty($org['rsi_sid']) ? "RSI-Orga: {$org['rsi_org_name']} ({$org['rsi_sid']})\n" : '')
+            . "\n"
             . 'Wähle unten die Rollen. Wer eine Nutzungs- oder Planer-Rolle hat, darf sich auf ' . \Hangar\Config::appUrl() . ' anmelden.'
             . ($note !== null ? "\n\n$note" : '');
         return [

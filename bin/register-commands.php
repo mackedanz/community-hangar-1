@@ -17,6 +17,13 @@ $status = Hangar\DiscordBot::registerCommands([
         'name' => 'einrichten',
         'description' => 'Community-Hangar für diesen Server einrichten: Rollen wählen und Mitglieder übernehmen',
         'type' => 1,
+        'options' => [[
+            'type' => 3, // STRING
+            'name' => 'rsi_kuerzel',
+            'description' => 'Kürzel der Orga auf RSI (z. B. EXPG): färbt in der Mitgliederliste den Rahmen nach RSI-Zugehörigkeit',
+            'required' => false,
+            'max_length' => 20,
+        ]],
         'default_member_permissions' => '32', // "Server verwalten"; die App prüft die Rechte zusätzlich selbst
         'dm_permission' => false,
     ],

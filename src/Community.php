@@ -132,7 +132,7 @@ final class Community
             return [];
         }
         $rows = Db::all(
-            'SELECT u.id, COALESCE(m.nick, u.name) AS name, u.image, u.rsi_handle, u.hangar_visibility, u.achievements_visibility, m.role
+            'SELECT u.id, COALESCE(m.nick, u.name) AS name, m.nick, u.name AS user_name, u.image, u.rsi_handle, u.hangar_visibility, u.achievements_visibility, m.role
                FROM org_memberships m JOIN users u ON u.id = m.user_id
               WHERE m.org_id = ? ORDER BY COALESCE(m.nick, u.name) ASC',
             [$orgId],
@@ -155,9 +155,24 @@ final class Community
             $orgsOf[$r['user_id']][] = $r['org_id'];
         }
 
-        return array_map(function ($u) use ($ships, $ach, $orgsOf, $viewer) {
+        // RSI-Zugehörigkeit: nur, wenn die Orga ein RSI-Kürzel hat und die Mitgliederliste schon abgeglichen wurde.
+        $rsi = Db::one('SELECT rsi_sid, rsi_redacted, rsi_synced_at FROM organizations WHERE id = ?', [$orgId]);
+        $roster = null;
+        if ($rsi !== null && $rsi['rsi_sid'] !== null && $rsi['rsi_synced_at'] !== null) {
+            $roster = [];
+            foreach (Db::all('SELECT handle, main FROM org_rsi_members WHERE org_id = ?', [$orgId]) as $r) {
+                $roster[strtolower($r['handle'])] = (bool) $r['main'];
+            }
+        }
+
+        return array_map(function ($u) use ($ships, $ach, $orgsOf, $viewer, $roster, $rsi) {
             $orgIds = $orgsOf[$u['id']] ?? [];
             return [
+                'rsiStatus' => $roster === null ? null : RsiOrg::status(
+                    [$u['rsi_handle'], RsiOrg::handleFromName($u['nick']), RsiOrg::handleFromName($u['user_name'])],
+                    $roster,
+                    (int) $rsi['rsi_redacted'],
+                ),
                 'id' => $u['id'], 'name' => $u['name'], 'image' => $u['image'], 'rsiHandle' => $u['rsi_handle'],
                 'isAdmin' => $u['role'] === 'ADMIN',
                 // null = für den Betrachter nicht sichtbar
