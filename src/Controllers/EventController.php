@@ -40,20 +40,20 @@ final class EventController extends Controller
     }
 
     /**
-     * Zwölf Monatsspalten ab dem aktuellen Monat (Berliner Zeit), jede mit ihren Events.
+     * Monatsspalten von einem Jahr vor bis ein Jahr nach dem aktuellen Monat (25 Spalten, Berliner Zeit), jede mit ihren Events.
      * @return list<array{key:string,label:string,events:list<array<string,mixed>>}>
      */
     private static function timeline(string $orgId, $viewer): array
     {
         [$y, $m] = self::parseMonth(null);
-        $start = new DateTimeImmutable(sprintf('%04d-%02d-01', $y, $m));
+        $start = (new DateTimeImmutable(sprintf('%04d-%02d-01', $y, $m)))->modify('-12 months');
         $from = EventTime::parseBerlinLocal($start->format('Y-m') . '-01T00:00') ?? throw HttpException::notFound();
         $cols = [];
-        for ($i = 0; $i < 12; $i++) {
+        for ($i = 0; $i <= 24; $i++) {
             $d = $start->modify("+$i months");
             $cols[$d->format('Y-m')] = ['key' => $d->format('Y-m'), 'label' => self::MONTHS[(int) $d->format('n') - 1] . ' ' . $d->format('Y'), 'events' => []];
         }
-        foreach (Events::listTimeline($orgId, $viewer, $from, 12) as $e) {
+        foreach (Events::listTimeline($orgId, $viewer, $from, 25) as $e) {
             $k = substr(EventTime::dayKey($e['startsAt']), 0, 7);
             if (isset($cols[$k])) {
                 $cols[$k]['events'][] = $e;

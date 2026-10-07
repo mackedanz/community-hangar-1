@@ -8,6 +8,16 @@ $base = '/o/' . $org['slug'] . '/events';
 $wdFmt = new IntlDateFormatter('de_DE', IntlDateFormatter::NONE, IntlDateFormatter::NONE, 'Europe/Berlin', IntlDateFormatter::GREGORIAN, 'EEE');
 $nowUtc = new DateTimeImmutable('now', new DateTimeZone('UTC'));
 $monthNow = substr($today, 0, 7);
+// Nächster anstehender (oder laufender) Termin ohne abgesagte: bekommt den grünen Rahmen
+$nextId = null;
+foreach ($timeline as $col) {
+    foreach ($col['events'] as $ev) {
+        if (!$ev['cancelled'] && ($ev['endsAt'] ?? $ev['startsAt']) >= $nowUtc) {
+            $nextId = $ev['id'];
+            break 2;
+        }
+    }
+}
 ?>
 <div class="space-y-6">
   <div class="flex flex-wrap items-center justify-between gap-2">
@@ -19,20 +29,23 @@ $monthNow = substr($today, 0, 7);
 
   <section class="space-y-2">
     
-    <div class="overflow-x-auto pb-3">
+    <div class="overflow-x-auto pb-3" data-timeline>
       <div class="flex min-w-max items-start gap-3">
         <?php foreach ($timeline as $col): ?>
-          <div class="w-72 shrink-0 space-y-2">
+          <div class="w-72 shrink-0 space-y-2"<?= $col['key'] === $monthNow ? ' data-now' : '' ?>>
             <div class="border-b-2 border-indigo-500 bg-indigo-500/20 px-2 py-1 text-sm font-semibold <?= $col['key'] === $monthNow ? 'text-indigo-400' : '' ?>"><?= e($col['label']) ?></div>
             <?php foreach ($col['events'] as $ev):
                 $mins = $ev['endsAt'] ? (int) round(($ev['endsAt']->getTimestamp() - $ev['startsAt']->getTimestamp()) / 60) : 0;
                 $dur = $mins > 0 ? 'ca. ' . rtrim(rtrim(number_format($mins / 60, 1, ',', ''), '0'), ',') . ' h' : '';
+                $running = !$ev['cancelled'] && $ev['endsAt'] && $ev['startsAt'] <= $nowUtc && $ev['endsAt'] >= $nowUtc;   // läuft gerade
                 $past = $ev['startsAt'] < $nowUtc && (!$ev['endsAt'] || $ev['endsAt'] < $nowUtc);
+                $locked = $past && !$org['canPlan'];   // Vergangenes öffnen nur Planer
+                $tag = $locked ? 'div' : 'a';
                 $dayNo = substr(EventTime::dayKey($ev['startsAt']), 8, 2);
                 $wd = $wdFmt->format($ev['startsAt']); ?>
-              <a href="<?= e($base . '/' . $ev['id']) ?>" class="flex overflow-hidden rounded border transition hover:border-indigo-400 <?= $ev['cancelled'] ? 'border-zinc-800 opacity-60' : ($past ? 'border-zinc-800 opacity-75' : 'border-indigo-500/60') ?>">
-                <div class="flex w-14 shrink-0 flex-col items-center justify-center <?= $ev['cancelled'] ? 'bg-zinc-800' : 'bg-indigo-500/25' ?>">
-                  <span class="text-[10px] uppercase text-zinc-400"><?= e($wd) ?></span>
+              <<?= $tag ?><?= ' data-start="' . $ev['startsAt']->getTimestamp() . '"' . ($ev['endsAt'] ? ' data-end="' . $ev['endsAt']->getTimestamp() . '"' : '') ?><?= $locked ? ' aria-disabled="true"' : ' href="' . e($base . '/' . $ev['id']) . '"' ?> class="flex overflow-hidden rounded border transition <?= $past ? 'border-zinc-800 opacity-45 grayscale' : ($ev['cancelled'] ? 'border-zinc-800 opacity-60' : ($ev['id'] === $nextId ? 'border-green-500 ring-1 ring-green-500/60' : 'border-indigo-500/60')) ?> <?= $locked ? 'cursor-default' : 'hover:border-indigo-400' . ($past ? ' hover:opacity-80' : '') ?>">
+                <div class="flex w-14 shrink-0 flex-col items-center justify-center <?= $ev['cancelled'] ? 'bg-zinc-800' : ($running ? 'bg-green-600 text-white' : 'bg-indigo-500/25') ?>">
+                  <span class="text-[10px] uppercase <?= $running ? 'text-green-100' : 'text-zinc-400' ?>"><?= e($wd) ?></span>
                   <span class="text-2xl font-bold leading-none"><?= e($dayNo) ?></span>
                 </div>
                 <div class="min-w-0 flex-1 space-y-0.5 bg-zinc-950/70 px-2 py-1.5">
@@ -43,7 +56,7 @@ $monthNow = substr($today, 0, 7);
                     <span class="truncate">von <?= e($ev['by']) ?></span>
                   </div>
                 </div>
-              </a>
+              </<?= $tag ?>>
             <?php endforeach; ?>
             <?php if (!$col['events']): ?><p class="px-1 text-xs text-zinc-600">Keine Events</p><?php endif; ?>
           </div>
@@ -52,3 +65,49 @@ $monthNow = substr($today, 0, 7);
     </div>
   </section>
 </div>
+<script>
+(function () {
+  var t = document.querySelector("[data-timeline]");
+  if (!t) return;
+  var n = t.querySelector("[data-now]");
+
+  // Beim Öffnen den aktuellen Monat in die Mitte rücken (erst, wenn die Leiste eine Breite hat).
+  function center() {
+    if (!n) return true;
+    var a = t.getBoundingClientRect(), b = n.getBoundingClientRect();
+    if (!a.width) return false;
+    t.scrollLeft += b.left - a.left - (a.width - b.width) / 2;
+    return true;
+  }
+  if (!center() && window.ResizeObserver) {
+    var o = new ResizeObserver(function () { if (center()) o.disconnect(); });
+    o.observe(t);
+  }
+
+  // Beim nächsten Start oder Ende eines Termins die Leiste neu laden (Farben, Rahmen, Sperre), ohne die Seite zu springen.
+  var timer;
+  function schedule() {
+    clearTimeout(timer);
+    var now = Date.now() / 1000, next = Infinity;
+    t.querySelectorAll("[data-start]").forEach(function (c) {
+      ["start", "end"].forEach(function (k) {
+        var v = +c.getAttribute("data-" + k);
+        if (v > now && v < next) next = v;
+      });
+    });
+    timer = setTimeout(refresh, Math.min((next - now) * 1000 + 1000, 600000));
+  }
+  function refresh() {
+    fetch(location.href, { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+      .then(function (html) {
+        var fresh = new DOMParser().parseFromString(html, "text/html").querySelector("[data-timeline]");
+        if (fresh) { var x = t.scrollLeft; t.innerHTML = fresh.innerHTML; t.scrollLeft = x; }
+      })
+      .catch(function () {})
+      .then(schedule);
+  }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) refresh(); });
+  schedule();
+})();
+</script>
