@@ -24,6 +24,13 @@ final class ImageController extends Controller
         return self::serve($req, ShipImages::ensure($slug));
     }
 
+    /** GET /img/extra/{key}: Bild aus der Ausnahmeliste (Einträge, zu denen RSI kein Bild hat). */
+    public static function extra(Request $req, array $p): Response
+    {
+        Auth::requireViewer($req);
+        return self::serve($req, ShipImages::ensureFallback((string) ($p['key'] ?? '')));
+    }
+
     /** GET /img/armor/{slug}: Rüstungen aus dem Katalog (Quelle: Star Citizen Wiki). */
     public static function armor(Request $req, array $p): Response
     {

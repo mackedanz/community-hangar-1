@@ -33,7 +33,10 @@ final class ShipImagesTest extends DbTestCase
 
     protected function tearDown(): void
     {
-        foreach (glob($this->dir . '/ships/*') ?: [] as $f) {
+        foreach (array_merge(glob($this->dir . '/ships/*') ?: [], glob($this->dir . '/ships/.*') ?: []) as $f) {
+            if (is_dir($f)) {
+                continue;
+            }
             @unlink($f);
         }
         @rmdir($this->dir . '/ships');
@@ -83,6 +86,48 @@ final class ShipImagesTest extends DbTestCase
         });
         $this->assertNotNull(ShipImages::ensure('retaliator'));
         $this->assertSame([], $this->urls);
+    }
+
+    public function testFallbackListIsMatchedByNormalizedName(): void
+    {
+        $this->assertSame('dragonfly-star-kitten-edition', ShipImages::fallbackKey('Dragonfly Star Kitten Edition'));
+        $this->assertSame('dragonfly-star-kitten-edition', ShipImages::fallbackKey("  dragonfly – STAR kitten edition "));
+        $this->assertNull(ShipImages::fallbackKey('Dragonfly Black'));
+        $this->assertNull(ShipImages::fallbackKey(null));
+        $this->assertSame('/img/extra/dragonfly-star-kitten-edition', ShipImages::fallbackSrc('Dragonfly Star Kitten Edition'));
+        $this->assertNull(ShipImages::fallbackSrc('Unbekannt'));
+    }
+
+    public function testFallbackImageIsDownloadedOnceFromItsFixedHostAndStored(): void
+    {
+        $key = 'dragonfly-star-kitten-edition';
+        Client::fake(function (string $m, string $url) {
+            $this->urls[] = $url;
+            return str_starts_with($url, 'https://storage.fltyrd.net/')
+                ? ['status' => 200, 'headers' => ['content-type' => 'image/png'], 'body' => $this->png]
+                : ['status' => 404, 'headers' => [], 'body' => ''];
+        });
+        $img = ShipImages::ensureFallback($key);
+        $this->assertNotNull($img);
+        $this->assertFileExists($this->dir . "/ships/extra-$key.png");
+        $this->assertSame(['https://storage.fltyrd.net/iq6atqxvsaqzbx56e49paaq36yfj'], $this->urls);
+
+        $this->urls = [];
+        $this->assertNotNull(ShipImages::ensureFallback($key));
+        $this->assertSame([], $this->urls, 'Zweiter Aufruf darf nicht erneut laden');
+        $this->assertNull(ShipImages::ensureFallback('gibt-es-nicht'));
+    }
+
+    public function testFallbackFailureIsNotRetriedImmediately(): void
+    {
+        $key = 'dragonfly-star-kitten-edition';
+        Client::fake(function (string $m, string $url) {
+            $this->urls[] = $url;
+            return ['status' => 500, 'headers' => [], 'body' => ''];
+        });
+        $this->assertNull(ShipImages::ensureFallback($key));
+        $this->assertNull(ShipImages::ensureFallback($key));
+        $this->assertCount(1, $this->urls);
     }
 
     public function testRejectsDisallowedHostsAndStoresNothing(): void

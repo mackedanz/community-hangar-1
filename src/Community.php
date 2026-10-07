@@ -113,7 +113,7 @@ final class Community
         foreach ($customGroups as $g) {
             $entries[] = [
                 'catalogItemId' => null, 'name' => $g['n'], 'count' => (int) $g['q'], 'href' => null,
-                'manufacturer' => null, 'imageUrl' => null, 'specs' => FleetFilter::parseSpecs(null),
+                'manufacturer' => null, 'imageUrl' => \Hangar\Images\ShipImages::fallbackSrc($g['n']), 'specs' => FleetFilter::parseSpecs(null),
             ];
         }
         usort($entries, fn ($a, $b) => $b['count'] <=> $a['count'] ?: strcasecmp($a['name'], $b['name']));

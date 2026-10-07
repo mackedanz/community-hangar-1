@@ -110,7 +110,7 @@ use Hangar\Http\View;
               'href' => $c ? '/catalog/' . strtolower($entry['kind']) . '/' . rawurlencode($c['slug']) : null,
               'subtitle' => $i && $i['type_label'] ? $i['type_label'] . ($c['manufacturer'] ?? null ? ' · ' . $c['manufacturer'] : '') : ($c['manufacturer'] ?? null),
               'count' => (int) $entry['quantity'],
-              'image' => $c['imageSrc'] ?? (!empty($i['image_url']) ? '/img/info/' . rawurlencode($i['match_key']) : null),
+              'image' => $c['imageSrc'] ?? (!empty($i['image_url']) ? '/img/info/' . rawurlencode($i['match_key']) : \Hangar\Images\ShipImages::fallbackSrc(Hangar::entryName($entry))),
               'tooltip' => $i['description'] ?? Hangar::entryName($entry),
               'lti' => (bool) $entry['lti'],
               'notReady' => $entry['kind'] === 'SHIP' && $c ? FleetFilter::notReadyLabel(FleetFilter::parseSpecs($c['data'] ?? null)['status']) : null,

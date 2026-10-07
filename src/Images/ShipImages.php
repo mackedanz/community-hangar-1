@@ -21,6 +21,15 @@ final class ShipImages
     private const QUERY = 'query ShipImage($query: SearchQuery) { store(browse: true) { search(query: $query) { resources { url ... on RSIShip { media { thumbnail { slideshow } } } } } } }';
     /** Nur von diesem Host wird geladen (RSI-Bildspeicher), nur per https. */
     public const ALLOWED_HOSTS = ['media.robertsspaceindustries.com'];
+    /**
+     * Ausnahmen für Einträge, zu denen RSI kein Bild liefert (z. B. Sondereditionen ohne Store-Seite).
+     * Schlüssel: Name kleingeschrieben, Nicht-Buchstaben/-Ziffern zu "-" (siehe fallbackKey). Nur diese festen
+     * Adressen werden geladen, nur von FALLBACK_HOSTS. Quelle: FleetYards (storage.fltyrd.net).
+     */
+    public const FALLBACK = [
+        'dragonfly-star-kitten-edition' => 'https://storage.fltyrd.net/iq6atqxvsaqzbx56e49paaq36yfj',
+    ];
+    public const FALLBACK_HOSTS = ['storage.fltyrd.net'];
     public const MAX_BYTES = 5 * 1024 * 1024;
     /** Nach einem Fehlschlag wird frühestens nach dieser Zeit erneut versucht. */
     public const RETRY_SECONDS = 86400;
@@ -200,6 +209,56 @@ final class ShipImages
             return is_file($path) ? ['path' => $path, 'mime' => self::MIME[$ext]] : null;
         }
         return ['path' => $path, 'mime' => self::MIME[$ext]];
+    }
+
+    /** Schlüssel der Ausnahmeliste für einen Eintragsnamen, oder null, wenn es keine Ausnahme gibt. */
+    public static function fallbackKey(?string $name): ?string
+    {
+        $key = trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower((string) $name)), '-');
+        return isset(self::FALLBACK[$key]) ? $key : null;
+    }
+
+    /** Bildadresse für die Anzeige, falls der Name auf der Ausnahmeliste steht. */
+    public static function fallbackSrc(?string $name): ?string
+    {
+        $key = self::fallbackKey($name);
+        return $key === null ? null : '/img/extra/' . $key;
+    }
+
+    /**
+     * Bild aus der Ausnahmeliste: gespeichert ausliefern, sonst einmal laden, prüfen und speichern.
+     * Nach einem Fehlschlag wird eine Stunde lang nicht erneut versucht.
+     * @return array{path:string,mime:string}|null
+     */
+    public static function ensureFallback(string $key): ?array
+    {
+        if (!isset(self::FALLBACK[$key])) {
+            return null;
+        }
+        $name = 'extra-' . $key;
+        $dir = self::dir();
+        foreach (self::MIME as $ext => $mime) {
+            if (is_file("$dir/$name.$ext")) {
+                return ['path' => "$dir/$name.$ext", 'mime' => $mime];
+            }
+        }
+        $fail = "$dir/.fail-$name";
+        if (is_file($fail) && time() - (int) filemtime($fail) < 3600) {
+            return null;
+        }
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+            return null;
+        }
+        try {
+            $img = self::download(self::FALLBACK[$key], self::FALLBACK_HOSTS);
+            $saved = $img !== null ? self::storeIn($dir, $name, $img['body'], $img['ext']) : null;
+        } catch (NetworkError | \RuntimeException) {
+            $saved = null;
+        }
+        if ($saved === null) {
+            @touch($fail);
+        }
+        return $saved;
     }
 
     /** Platzhalter, wenn kein Bild verfügbar ist. */
