@@ -52,9 +52,10 @@ services:
       CATALOG_SYNC_INTERVAL_SECONDS: ${CATALOG_SYNC_INTERVAL_SECONDS:-604800}
     volumes:
       - ship-images:/var/www/html/storage/images
-    # Port auf dem Server, an den der Reverse-Proxy weiterleitet (HANGAR_PORT in .env änderbar)
+    # Port auf dem Server, an den der Reverse-Proxy weiterleitet (HANGAR_PORT in .env änderbar).
+    # HANGAR_BIND beschränkt, an welche Adresse er gebunden wird (Standard: alle Schnittstellen, siehe .env.docker.example)
     ports:
-      - "${HANGAR_PORT:-8181}:80"
+      - "${HANGAR_BIND:-0.0.0.0}:${HANGAR_PORT:-8181}:80"
 
   db:
     image: mariadb:11.8

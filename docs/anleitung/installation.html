@@ -254,6 +254,7 @@ Als Bremse löscht ein Abgleich nichts, wenn auf einmal mindestens 5 Personen un
 <h2 class="pb"><span class="no">5</span>HTTPS einrichten (Reverse-Proxy)</h2>
 <p>Die App spricht nur HTTP. Davor muss ein Reverse-Proxy HTTPS und das Zertifikat übernehmen. Die <code>docker-compose.yml</code> gibt dafür den Port <b>8181</b> auf dem Server frei
 (änderbar mit <code>HANGAR_PORT</code>). Prüfe vorher, dass er frei ist: <code>ss -ltn | grep 8181</code> (keine Ausgabe = frei).
+Der Port hört standardmäßig auf allen Schnittstellen. Läuft der Proxy auf demselben Server, setze <code>HANGAR_BIND=127.0.0.1</code> in der <code>.env</code>, dann ist die App nur noch über den Proxy erreichbar. Steht der Proxy auf einem anderen Rechner, erlaube Port 8181 per Firewall nur für dessen IP.
 Hier der Weg mit dem <b>Nginx Proxy Manager</b>. Ohne eigenen Proxy findest du einen Hinweis in Kapitel 13.</p>
 <h3>Reiter „Details“</h3>
 <figure class="half"><img src="bilder/s48.jpg" alt="Proxy-Host: Domain, Schema http, die IP deines Servers, Port 8181. „Block Common Exploits“ an, „Cache Assets“ und „Websockets“ aus. Zugriffsliste: „Publicly Accessible“."><figcaption>Proxy-Host: Domain, Schema http, die IP deines Servers, Port 8181. „Block Common Exploits“ an, „Cache Assets“ und „Websockets“ aus. Zugriffsliste: „Publicly Accessible“.</figcaption></figure>
