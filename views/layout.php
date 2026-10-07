@@ -5,6 +5,7 @@
 /** @var string|null $csrf */
 /** @var bool|null $wide breiter Inhaltsbereich (Kachelraster); Logo und Navigation bleiben immer schmal */
 $wide = !empty($wide);
+$bare = !empty($bare);   // /pur/…: nur der Inhalt, ohne Logo, Navigation und Fußzeile
 $maxW = $wide ? 'max-w-[1800px]' : 'max-w-5xl';
 $viewer = $viewer ?? null;
 $serverAdmin = $serverAdmin ?? false;
@@ -34,6 +35,7 @@ $imprintUrl = \Hangar\Env::get('LEGAL_IMPRINT_URL');
 <?php /* Nur der Bereich über der Fußzeile scrollt; die Fußzeile bleibt immer sichtbar. */ ?>
 <div class="min-h-0 flex-1 overflow-y-auto" id="page-scroll">
 <div class="flex min-h-full flex-col">
+<?php if (!$bare): ?>
 <div class="border-b border-zinc-800">
   <div class="mx-auto flex max-w-5xl justify-center px-4 py-3">
     <a href="/" title="Community-Hangar"><img src="/logo.png" alt="Explorer Germany" width="80" height="80" class="h-20 w-20"></a>
@@ -81,6 +83,7 @@ $imprintUrl = \Hangar\Env::get('LEGAL_IMPRINT_URL');
     <?php endif; ?>
   </nav>
 </header>
+<?php endif; ?>
 <main class="mx-auto w-full <?= $maxW ?> flex-1 px-4 py-8">
   <?php if (!empty($flash)): ?>
     <p role="status" class="mb-6 rounded border p-3 text-sm <?= $flash['t'] === 'error' ? 'border-red-700 text-red-400' : 'border-green-700 text-green-400' ?>"><?= e($flash['m']) ?></p>
@@ -89,6 +92,7 @@ $imprintUrl = \Hangar\Env::get('LEGAL_IMPRINT_URL');
 </main>
 </div>
 </div>
+<?php if (!$bare): ?>
 <footer class="shrink-0 border-t border-zinc-800 bg-zinc-950/85 py-3 text-center text-xs text-zinc-500">
   MADE BY THE COMMUNITY ·
   <?php if ($privacyUrl): ?>
@@ -100,6 +104,7 @@ $imprintUrl = \Hangar\Env::get('LEGAL_IMPRINT_URL');
     · <a href="<?= e($imprintUrl) ?>" target="_blank" rel="noopener noreferrer" class="hover:text-zinc-300">Impressum</a>
   <?php endif; ?>
 </footer>
+<?php endif; ?>
 <script src="/js/app.js" defer></script>
 <script src="/js/sync-receive.js" defer></script>
 </body>

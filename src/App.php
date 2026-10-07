@@ -117,8 +117,19 @@ final class App
         return false;
     }
 
+    /** Seiten, die es unter /pur/… ohne Logo, Navigation und Fußzeile gibt. */
+    private const BARE_PATH = '#^/(catalog(/.*)?|hangar(/.*)?|o/[^/]+/hangar)$#';
+
     public static function handle(Request $req): Response
     {
+        $bare = false;
+        if (preg_match('#^/pur(/.*)$#', $req->path, $m)) {
+            if (!preg_match(self::BARE_PATH, $m[1])) {
+                return Response::notFound();
+            }
+            $bare = true;
+            $req = new Request($req->method, $m[1], $req->query, $req->post, $req->headers, $req->cookies, $req->body, $req->ip);
+        }
         Auth::reset();
         View::resetShared();
         try {
@@ -132,8 +143,12 @@ final class App
             'serverAdmin' => Auth::isServerAdmin($viewer),
             'csrf' => $viewer?->csrf ?? '',
             'flash' => $flash,
+            'bare' => $bare,
         ]);
         $res = self::routes()->dispatch($req);
+        if ($bare) {
+            $res = self::keepBare($res);
+        }
         // Meldung wurde dieser Seite angezeigt: Cookie löschen (außer die Antwort setzt gerade eine neue)
         if ($flash !== null && !self::setsFlash($res)) {
             Flash::clear($res);
@@ -147,5 +162,17 @@ final class App
             ->withHeader('Referrer-Policy', 'same-origin')
             ->withHeader('X-Frame-Options', 'DENY')
             ->withHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+    }
+
+    /** Links und Weiterleitungen auf die drei Seiten bleiben in der Ansicht ohne Rahmen. */
+    private static function keepBare(Response $res): Response
+    {
+        if (isset($res->headers['Location']) && preg_match(self::BARE_PATH, (string) parse_url($res->headers['Location'], PHP_URL_PATH))) {
+            $res->headers['Location'] = '/pur' . $res->headers['Location'];
+        }
+        if (str_contains($res->headers['Content-Type'] ?? '', 'text/html')) {
+            $res->body = (string) preg_replace_callback('#(href|action)="(/[^"]*)"#', static fn (array $m): string => preg_match(self::BARE_PATH, (string) parse_url(html_entity_decode($m[2]), PHP_URL_PATH)) ? $m[1] . '="/pur' . $m[2] . '"' : $m[0], $res->body);
+        }
+        return $res;
     }
 }
