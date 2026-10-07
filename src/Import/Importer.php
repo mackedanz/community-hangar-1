@@ -41,7 +41,7 @@ final class Importer
                     'id' => new_id(),
                     'user_id' => $userId,
                     'catalog_item_id' => $row['catalog_item_id'] ?? null,
-                    'custom_name' => $row['custom_name'] ?? null,
+                    'custom_name' => isset($row['custom_name']) ? mb_substr((string) $row['custom_name'], 0, 190) : null,
                     'kind' => $row['kind'],
                     'quantity' => $row['quantity'],
                     'lti' => $row['lti'] ? 1 : 0,

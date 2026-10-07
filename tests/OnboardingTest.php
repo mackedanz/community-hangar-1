@@ -163,6 +163,19 @@ final class OnboardingTest extends DbTestCase
         $this->assertSame('EXPG', Db::val('SELECT rsi_sid FROM organizations'));
     }
 
+    public function testApiTokenStopsWorkingWhenPersonIsRemovedFromTheAllowlist(): void
+    {
+        Env::set('LOGIN_REQUIRES_ALLOWLIST', '1');
+        $org = Onboarding::ensureOrg(self::GUILD, self::ADMIN, 'Chef')['id'];
+        $user = $this->mkUser(['discord_id' => '700000000000000042']);
+        $token = \Hangar\ApiToken::create($user['id'], 't')['token'];
+        $this->assertNull(\Hangar\ApiToken::verify($token), 'nicht auf der Zugangsliste');
+        Db::insert('org_allowed_members', ['org_id' => $org, 'discord_id' => '700000000000000042', 'name' => 'X', 'fixed' => 0]);
+        $this->assertSame($user['id'], \Hangar\ApiToken::verify($token));
+        Db::run('DELETE FROM org_allowed_members WHERE discord_id = ?', ['700000000000000042']);
+        $this->assertNull(\Hangar\ApiToken::verify($token), 'nach dem Entfernen sofort ungültig');
+    }
+
     public function testCommandIsRepeatableAndReusesExistingOrg(): void
     {
         $this->post($this->command());

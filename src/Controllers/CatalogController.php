@@ -30,9 +30,10 @@ final class CatalogController extends Controller
 
     public static function index(Request $req): Response
     {
+        Auth::requireViewer($req);
         $q = trim((string) $req->query('q', ''));
         $kind = in_array($req->query('kind'), self::CATALOG_KINDS, true) ? (string) $req->query('kind') : 'SHIP';
-        $page = max(1, (int) $req->query('page', '1'));
+        $page = min(1000, max(1, (int) $req->query('page', '1')));
         $key = Text::normalizeName($q);
 
         $where = 'kind = ?';
@@ -86,7 +87,7 @@ final class CatalogController extends Controller
 
     public static function show(Request $req, array $p): Response
     {
-        $viewer = Auth::viewer($req);
+        $viewer = Auth::requireViewer($req);
         $kind = strtoupper((string) $p['kind']);
         if (!Constants::isKind($kind)) {
             throw HttpException::notFound();

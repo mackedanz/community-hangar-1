@@ -6,6 +6,9 @@ namespace Hangar\Http;
 
 final class Request
 {
+    /** Mehr als das wird nie gelesen (Import: 5 MB); größere Anfragen sind ohnehin abzulehnen. */
+    public const MAX_BODY_BYTES = 5 * 1024 * 1024 + 1;
+
     /**
      * @param array<string,mixed> $query
      * @param array<string,mixed> $post
@@ -38,7 +41,8 @@ final class Request
         if (isset($_SERVER['CONTENT_TYPE'])) {
             $headers['content-type'] = (string) $_SERVER['CONTENT_TYPE'];
         }
-        $body = (string) file_get_contents('php://input');
+        $in = fopen('php://input', 'r');
+        $body = $in === false ? '' : (string) stream_get_contents($in, self::MAX_BODY_BYTES);
         return new self(
             strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')),
             $path,

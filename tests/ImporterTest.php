@@ -83,6 +83,15 @@ final class ImporterTest extends DbTestCase
         $this->assertSame(1, $this->owned('user_id = ?', [$this->otherId]));
     }
 
+    public function testVeryLongNamesAreShortenedInsteadOfFailing(): void
+    {
+        $plan = ['matched' => [], 'unmatched' => [['name' => str_repeat('ä', 400), 'quantity' => 1, 'lti' => false]], 'others' => [['name' => str_repeat('x', 500), 'kind' => 'PAINT', 'quantity' => 1]], 'handle' => null];
+        Importer::applyPlan($this->userId, $plan, 'api');
+        $lens = array_map('intval', array_column(Db::all('SELECT CHAR_LENGTH(custom_name) AS l FROM owned_items WHERE user_id = ?', [$this->userId]), 'l'));
+        sort($lens);
+        $this->assertSame([190, 190], $lens);
+    }
+
     public function testHandleFromSyncAlwaysApplies(): void
     {
         Db::run("UPDATE users SET rsi_handle = 'Alter_Handle' WHERE id = ?", [$this->userId]);

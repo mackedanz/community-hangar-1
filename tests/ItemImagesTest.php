@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Hangar\Tests;
 
 use Hangar\App;
+use Hangar\Auth;
 use Hangar\Community;
 use Hangar\Db;
 use Hangar\Env;
@@ -149,22 +150,42 @@ final class ItemImagesTest extends DbTestCase
         $this->assertSame('/img/ship/retaliator', Community::imageSrc('SHIP', 'retaliator', null));
     }
 
+    /** @return array<string,string> Cookie einer angemeldeten Testperson */
+    private function login(): array
+    {
+        $u = $this->mkUser(['membership_checked_at' => \Hangar\Time::nowDb(), 'membership_status' => 'OK']);
+        return [Auth::COOKIE => Auth::createSession($u['id'])['token']];
+    }
+
+    public function testImageRoutesNeedLoginAndDoNotDownloadForGuests(): void
+    {
+        $this->fakeHost();
+        foreach (['/img/armor/arden-sl-core', '/img/info/irgendwas', '/img/ship/retaliator'] as $path) {
+            $res = App::handle(new Request('GET', $path));
+            $this->assertSame(303, $res->status, $path);
+            $this->assertSame('/login', $res->headers['Location'], $path);
+        }
+        $this->assertSame([], $this->urls, 'ohne Anmeldung wird nichts heruntergeladen');
+    }
+
     public function testRoutesServeStoredImageAndPlaceholder(): void
     {
         $this->fakeHost();
-        $res = App::handle(new Request('GET', '/img/armor/arden-sl-core'));
+        $c = $this->login();
+        $res = App::handle(new Request('GET', '/img/armor/arden-sl-core', [], [], [], $c));
         $this->assertSame(200, $res->status);
         $this->assertSame('image/png', $res->headers['Content-Type']);
         $this->assertSame($this->png, $res->body);
 
         $etag = $res->headers['ETag'];
-        $this->assertSame(304, App::handle(new Request('GET', '/img/armor/arden-sl-core', [], [], ['if-none-match' => $etag]))->status);
+        $this->assertStringContainsString('private', $res->headers['Cache-Control']);
+        $this->assertSame(304, App::handle(new Request('GET', '/img/armor/arden-sl-core', [], [], ['if-none-match' => $etag], $c))->status);
 
-        $ph = App::handle(new Request('GET', '/img/info/gibtesnicht'));
+        $ph = App::handle(new Request('GET', '/img/info/gibtesnicht', [], [], [], $c));
         $this->assertSame(200, $ph->status);
         $this->assertStringContainsString('image/svg+xml', $ph->headers['Content-Type']);
 
-        $this->assertSame(404, App::handle(new Request('GET', '/img/armor/' . rawurlencode('a b')))->status);
+        $this->assertSame(404, App::handle(new Request('GET', '/img/armor/' . rawurlencode('a b'), [], [], [], $c))->status);
     }
 
     // --- Ausgrauen --------------------------------------------------------------------------
@@ -185,7 +206,7 @@ final class ItemImagesTest extends DbTestCase
     {
         Db::insert('catalog_items', ['id' => 's1', 'kind' => 'SHIP', 'slug' => 'fertig', 'name' => 'Fertig', 'match_key' => 'fertig', 'source' => 'RSI_MATRIX', 'data' => json_encode(['status' => 'flight-ready'])]);
         Db::insert('catalog_items', ['id' => 's2', 'kind' => 'SHIP', 'slug' => 'konzept', 'name' => 'Konzept', 'match_key' => 'konzept', 'source' => 'RSI_MATRIX', 'data' => json_encode(['status' => 'in-concept'])]);
-        $page = App::handle(new Request('GET', '/catalog', ['kind' => 'SHIP']))->body;
+        $page = App::handle(new Request('GET', '/catalog', ['kind' => 'SHIP'], [], [], $this->login()))->body;
         $this->assertSame(1, substr_count($page, 'nicht flight ready (In Konzept)'));
         $this->assertStringContainsString('grayscale', $page);
     }

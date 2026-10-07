@@ -42,8 +42,8 @@ $imprintUrl = \Hangar\Env::get('LEGAL_IMPRINT_URL');
 <header class="border-b border-zinc-800">
   <nav class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
     <a href="/" class="font-semibold">Community-Hangar</a>
-    <a href="/catalog" class="<?= $navClass($here('/catalog')) ?>"<?= $cur($here('/catalog')) ?>>Katalog</a>
     <?php if ($viewer): ?>
+      <a href="/catalog" class="<?= $navClass($here('/catalog')) ?>"<?= $cur($here('/catalog')) ?>>Katalog</a>
       <?php if (count($viewer->orgs) === 1): $o = $viewer->orgs[0]; ?>
         <a href="/o/<?= e($o['slug']) ?>" class="flex items-center gap-2 <?= $navClass($here('/o/' . $o['slug'])) ?>"<?= $cur($here('/o/' . $o['slug'])) ?>>
           <?= \Hangar\Http\View::partial('partials/org_icon', ['name' => $o['name'], 'iconUrl' => $o['iconUrl'], 'size' => 'h-5 w-5']) ?>

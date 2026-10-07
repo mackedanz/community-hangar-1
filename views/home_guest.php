@@ -7,6 +7,5 @@
   </p>
   <div class="flex gap-3">
     <a href="/login" class="rounded bg-indigo-600 px-4 py-2 font-medium hover:bg-indigo-500">Mit Discord anmelden</a>
-    <a href="/catalog" class="rounded bg-zinc-800 px-4 py-2 hover:bg-zinc-700">Schiffskatalog ansehen</a>
   </div>
 </div>

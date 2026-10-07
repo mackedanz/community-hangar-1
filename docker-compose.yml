@@ -52,6 +52,9 @@ services:
       CATALOG_SYNC_INTERVAL_SECONDS: ${CATALOG_SYNC_INTERVAL_SECONDS:-604800}
     volumes:
       - ship-images:/var/www/html/storage/images
+    # Grenzen, damit eine überlastete App nicht den ganzen Server mitzieht
+    mem_limit: 1g
+    pids_limit: 300
     # Port auf dem Server, an den der Reverse-Proxy weiterleitet (HANGAR_PORT in .env änderbar).
     # HANGAR_BIND beschränkt, an welche Adresse er gebunden wird (Standard: alle Schnittstellen, siehe .env.docker.example)
     ports:

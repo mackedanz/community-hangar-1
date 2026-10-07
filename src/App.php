@@ -137,9 +137,14 @@ final class App
         if ($flash !== null && !self::setsFlash($res)) {
             Flash::clear($res);
         }
+        if ($viewer !== null && !isset($res->headers['Cache-Control'])) {
+            // Angemeldete Seiten nicht zwischenspeichern (Zurück-Taste nach dem Abmelden, geteilte Rechner).
+            $res->withHeader('Cache-Control', 'private, no-store');
+        }
         return $res
             ->withHeader('X-Content-Type-Options', 'nosniff')
             ->withHeader('Referrer-Policy', 'same-origin')
-            ->withHeader('X-Frame-Options', 'DENY');
+            ->withHeader('X-Frame-Options', 'DENY')
+            ->withHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
     }
 }

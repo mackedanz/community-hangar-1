@@ -16,7 +16,7 @@ Sie führt vom Discord Developer Portal über den Server und den Reverse-Proxy b
   Vorschau, übernommen wird erst nach Bestätigung. Keine Browser-Erweiterung, keine RSI-Zugangsdaten.
 - **Orga:** Orga Hangar (anonym gezählt, filterbar), Mitglieder und Profile, Statistik, Aktivitäten, Errungenschaften.
 - **Planung:** Einsätze mit Schiffen aus dem Orga Hangar, Besatzungsplätzen, Zu- und Absagen und einem Briefing für Discord.
-- **Katalog:** alle Schiffe der RSI Ship Matrix mit Daten und Bildern, auch ohne Anmeldung.
+- **Katalog:** alle Schiffe der RSI Ship Matrix mit Daten und Bildern, nur für angemeldete Nutzer.
 - **Mehrere Orgas** auf einer Instanz, voneinander getrennt. Namen zeigen den Nickname auf dem Discord-Server der Orga.
 
 Datenquellen: Schiffskatalog und Schiffsbilder von **RSI** (Ship Matrix und Store-Seite), Ergänzungen von FleetYards,

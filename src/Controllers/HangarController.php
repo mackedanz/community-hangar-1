@@ -45,8 +45,10 @@ final class HangarController extends Controller
     {
         $viewer = Auth::requireViewer($req);
         $back = '/hangar' . (($t = trim((string) $req->input('add', ''))) !== '' ? '?add=' . rawurlencode($t) : '');
-        if (($req->input('return') ?? '') !== '' && str_starts_with((string) $req->input('return'), '/catalog/')) {
-            $back = (string) $req->input('return');
+        // Nur eine Katalogseite der eigenen App ist als Ziel erlaubt (feste Form, keine Zeilenumbrüche).
+        $return = (string) $req->input('return', '');
+        if (preg_match('#^/catalog/[a-z]+/[A-Za-z0-9._~%-]+$#', $return) === 1) {
+            $back = $return;
         }
         try {
             Hangar::addItem($viewer->id, (string) $req->input('catalogItemId', ''), $req->input('quantity', '1'), $req->input('lti') === 'on');

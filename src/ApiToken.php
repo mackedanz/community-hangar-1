@@ -33,8 +33,12 @@ final class ApiToken
         if (!str_starts_with($token, self::PREFIX)) {
             return null;
         }
-        $row = Db::one('SELECT id, user_id FROM api_tokens WHERE token_hash = ?', [self::hash($token)]);
-        if ($row === null) {
+        $row = Db::one(
+            'SELECT t.id, t.user_id, u.discord_id FROM api_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ?',
+            [self::hash($token)],
+        );
+        // Wer von der Zugangsliste gestrichen wurde, darf auch mit einem Token nichts mehr (wie bei der Sitzung).
+        if ($row === null || !Onboarding::mayLogin($row['discord_id'])) {
             return null;
         }
         Db::run('UPDATE api_tokens SET last_used_at = ? WHERE id = ?', [Time::nowDb(), $row['id']]);

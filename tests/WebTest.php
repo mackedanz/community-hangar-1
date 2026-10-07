@@ -59,7 +59,7 @@ final class WebTest extends DbTestCase
 
     public function testGuestsAreSentToLoginForPrivatePages(): void
     {
-        foreach (['/hangar', '/settings', '/sync', '/o/alpha', '/o/alpha/events'] as $path) {
+        foreach (['/hangar', '/settings', '/sync', '/o/alpha', '/o/alpha/events', '/catalog', '/catalog/ship/x'] as $path) {
             $r = $this->call('GET', $path);
             $this->assertSame(303, $r->status, $path);
             $this->assertSame('/login', $r->headers['Location'], $path);
@@ -68,8 +68,46 @@ final class WebTest extends DbTestCase
 
     public function testPublicPagesWorkForGuests(): void
     {
-        foreach (['/', '/login', '/catalog', '/datenschutz', '/healthz'] as $path) {
+        foreach (['/', '/login', '/datenschutz', '/healthz'] as $path) {
             $this->assertSame(200, $this->call('GET', $path)->status, $path);
+        }
+        $home = $this->call('GET', '/')->body;
+        $this->assertStringNotContainsString('/catalog', $home, 'kein Katalog-Link für Gäste');
+    }
+
+    public function testCatalogIsForLoggedInUsersAndHugePageNumbersAreCapped(): void
+    {
+        $res = $this->call('GET', '/catalog', 'loner');
+        $this->assertSame(200, $res->status);
+        $this->assertStringContainsString('href="/catalog"', $res->body);
+        foreach (['99999999999999999999', '9223372036854775807', '-5', 'abc'] as $page) {
+            $this->assertSame(200, $this->call('GET', '/catalog', 'loner', ['query' => ['page' => $page]])->status, $page);
+        }
+    }
+
+    public function testSecurityHeadersAndNoStoreForLoggedInPages(): void
+    {
+        $guest = $this->call('GET', '/login');
+        $this->assertArrayNotHasKey('Cache-Control', $guest->headers);
+        $in = $this->call('GET', '/hangar', 'member');
+        $this->assertSame('private, no-store', $in->headers['Cache-Control']);
+        foreach ([$guest, $in] as $r) {
+            $this->assertStringContainsString('camera=()', $r->headers['Permissions-Policy']);
+            $this->assertSame('DENY', $r->headers['X-Frame-Options']);
+        }
+    }
+
+    public function testAddReturnTargetIsLimitedToCatalogPages(): void
+    {
+        $item = new_id();
+        Db::insert('catalog_items', ['id' => $item, 'kind' => 'SHIP', 'slug' => 'abc', 'name' => 'Abc', 'match_key' => 'abc', 'source' => 'RSI_MATRIX']);
+        $to = function (string $return) use ($item): string {
+            $r = $this->call('POST', '/hangar/add', 'member', ['post' => ['catalogItemId' => $item, 'return' => $return]]);
+            return (string) ($r->headers['Location'] ?? '');
+        };
+        $this->assertSame('/catalog/ship/abc', $to('/catalog/ship/abc'));
+        foreach (['//evil.example/x', 'https://evil.example', "/catalog/ship/abc\r\nSet-Cookie: x=1", '\\\\evil.example', '/other'] as $bad) {
+            $this->assertSame('/hangar', $to($bad), $bad);
         }
     }
 
@@ -165,7 +203,7 @@ final class WebTest extends DbTestCase
     public function testNotFoundPageForUnknownRoutesAndInvalidImageSlugs(): void
     {
         $this->assertSame(404, $this->call('GET', '/gibt/es/nicht')->status);
-        $this->assertSame(404, $this->call('GET', '/img/ship/..%2F..%2Fetc')->status);
+        $this->assertSame(404, $this->call('GET', '/img/ship/..%2F..%2Fetc', 'member')->status);
         $this->assertSame(405, $this->call('GET', '/logout')->status);
     }
 
