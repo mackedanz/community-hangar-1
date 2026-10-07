@@ -124,7 +124,9 @@ final class Parser
             }
         }
         $handle = isset($data['handle']) && is_string($data['handle']) ? trim($data['handle']) : '';
-        return ['handle' => $handle !== '' ? $handle : null, 'entries' => $entries, 'format' => 'hangarexport'];
+        // Nur ein gültiger RSI-Handle (Buchstaben, Ziffern, _ und -) wird übernommen; alles andere bleibt unberücksichtigt.
+        $valid = preg_match('/^[A-Za-z0-9_-]{2,100}$/', $handle) === 1;
+        return ['handle' => $valid ? $handle : null, 'entries' => $entries, 'format' => 'hangarexport'];
     }
 
     /**

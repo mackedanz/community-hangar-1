@@ -129,7 +129,30 @@
       finished = true;
       clearInterval(ping);
       clearInterval(watch);
+      window.removeEventListener("message", onProgress);
     }
+
+    /* Fortschritt des Lesezeichens: Seite und bisher gelesene Pledges (die Gesamtzahl kennt RSI vorab nicht). */
+    var progressText = null;
+    function onProgress(event) {
+      var d = event.data;
+      if (event.origin !== RSI_ORIGIN || event.source !== source || !d || d.type !== "ch-progress" || exportData || finished) return;
+      var line = "RSI wird gelesen … Seite " + (Number(d.page) || 1) + ", bisher " + (Number(d.pledges) || 0) + " Pledges.";
+      if (progressText) {
+        progressText.textContent = line;
+        return;
+      }
+      var wrap = el("div", "space-y-4");
+      progressText = el("p", "text-zinc-300", line);
+      wrap.appendChild(progressText);
+      var bar = el("div", "h-2 w-full overflow-hidden rounded bg-zinc-800");
+      bar.appendChild(el("div", "h-full w-1/3 animate-pulse rounded bg-indigo-500"));
+      wrap.appendChild(bar);
+      wrap.appendChild(el("p", "text-sm text-zinc-400", "Das dauert bei großen Hangars etwas, RSI wird bewusst langsam abgefragt. Den RSI-Tab bitte offen lassen."));
+      wrap.appendChild(cancelBtn());
+      show(wrap);
+    }
+    window.addEventListener("message", onProgress);
 
     done = function (plan) {
       stop();

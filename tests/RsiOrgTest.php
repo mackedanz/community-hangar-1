@@ -176,6 +176,28 @@ final class RsiOrgTest extends DbTestCase
         $this->assertEquals(['Cem der Große' => 'unknown', 'eXpG_McDance (Micha)' => 'main', 'Pilot_1' => 'main', 'Ben' => 'affiliate'], $by);
     }
 
+    public function testRsiSyncViaWebIsLimitedPerOrgButDisconnectIsFree(): void
+    {
+        $admin = $this->mkUser(['membership_checked_at' => \Hangar\Time::nowDb(), 'membership_status' => 'OK']);
+        Db::insert('org_memberships', ['user_id' => $admin['id'], 'org_id' => $this->orgId, 'role' => 'ADMIN', 'can_plan' => 1]);
+        $s = \Hangar\Auth::createSession($admin['id']);
+        $csrf = (string) Db::val('SELECT csrf_token FROM sessions WHERE token_hash = ?', [hash('sha256', $s['token'])]);
+        $post = function (string $sid) use ($s, $csrf) {
+            \Hangar\Auth::reset();
+            return \Hangar\App::handle(new \Hangar\Http\Request('POST', '/orgs/rsi', [], ['_csrf' => $csrf, 'orgId' => $this->orgId, 'rsiSid' => $sid], [], [\Hangar\Auth::COOKIE => $s['token']]));
+        };
+        for ($i = 0; $i < 3; $i++) {
+            $post('EXPG');
+        }
+        $requestsBefore = $this->requests;
+        $res = $post('EXPG');
+        $this->assertSame(303, $res->status);
+        $this->assertSame($requestsBefore, $this->requests, 'ab dem 4. Mal geht keine Anfrage mehr an RSI');
+        $this->assertSame('EXPG', Db::val('SELECT rsi_sid FROM organizations WHERE id = ?', [$this->orgId]));
+        $post('');
+        $this->assertNull(Db::val('SELECT rsi_sid FROM organizations WHERE id = ?', [$this->orgId]), 'Trennen ist nicht begrenzt');
+    }
+
     public function testProfileLinksToRsiProfileWhenHandleIsKnownOrVerified(): void
     {
         $mk = function (string $name, ?string $nick, ?string $handle = null): string {

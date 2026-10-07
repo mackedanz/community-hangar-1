@@ -155,11 +155,21 @@
     return m ? m[1] : "/account/pledges";
   }
 
+  /* Fortschritt an das Community-Hangar-Fenster melden (zeigt dort "Seite X, Y Pledges"); Fehler sind egal. */
+  function notify(page, count) {
+    try {
+      win.postMessage({ type: "ch-progress", page: page, pledges: count }, appOrigin);
+    } catch (e) {
+      /* Fenster weg oder noch nicht bereit */
+    }
+  }
+
   async function readWholeHangar() {
     var handle = text(document.querySelector(".c-account-sidebar__profile-info-handle, .a-handleName"));
     var pledges = [];
     for (var page = 1; page <= MAX_PAGES; page++) {
       setStatus("Lese Seite " + page + " … (" + pledges.length + " Pledges)");
+      notify(page, pledges.length);
       var res = await fetch(pledgesPath() + "?page=" + page + "&pagesize=" + PAGE_SIZE, {
         credentials: "same-origin",
       });

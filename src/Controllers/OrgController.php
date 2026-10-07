@@ -19,6 +19,7 @@ use Hangar\Onboarding;
 use Hangar\OrgError;
 use Hangar\Orgs;
 use Hangar\OrgStats;
+use Hangar\RateLimit;
 use Hangar\RsiOrg;
 
 final class OrgController extends Controller
@@ -122,6 +123,13 @@ final class OrgController extends Controller
         $slug = (string) Db::val('SELECT slug FROM organizations WHERE id = ?', [$orgId]);
         try {
             Orgs::requireOrgAdmin($viewer->id, $orgId);
+            // Der Abgleich ruft bis zu 100 Seiten bei RSI ab: je Orga höchstens 3 Mal pro Stunde (Trennen ist frei).
+            if (trim((string) $req->input('rsiSid', '')) !== '') {
+                $limit = RateLimit::hit("rsi-sync:$orgId", 3, 3600);
+                if (!$limit['ok']) {
+                    throw new OrgError('Der RSI-Abgleich lief zu oft. Bitte in ' . (int) ceil($limit['retryAfterSec'] / 60) . ' Minuten erneut versuchen.');
+                }
+            }
             $name = RsiOrg::connect($orgId, (string) $req->input('rsiSid', ''));
             if ($name === null) {
                 return Flash::ok("/o/$slug/settings", 'RSI-Orga getrennt.');
@@ -130,7 +138,7 @@ final class OrgController extends Controller
         } catch (\Throwable $e) {
             return Flash::error("/o/$slug/settings", self::errorMessage($e));
         }
-        return Flash::ok("/o/$slug/settings", "RSI-Orga „$name“ verbunden: {$r['members']} sichtbare Mitglieder, {$r['redacted']} verborgen.");
+        return Flash::ok("/o/$slug/settings", "RSI-Orga „{$name}“ verbunden: {$r['members']} sichtbare Mitglieder, {$r['redacted']} verborgen.");
     }
 
     public static function delete(Request $req): Response

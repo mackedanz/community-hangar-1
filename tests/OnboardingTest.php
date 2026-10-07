@@ -58,6 +58,10 @@ final class OnboardingTest extends DbTestCase
             if (str_contains($url, '/webhooks/')) {
                 return $json([]);
             }
+            if (str_contains($url, '/api/orgs/getOrgMembers')) {
+                $html = '<li class="member-item js-member-item org-main org-visibility-V" data-org-name="Explorer Germany"><a href="/citizens/Pilot_1"></a></li>';
+                return $json(['success' => 1, 'data' => ['totalrows' => 1, 'html' => $html]]);
+            }
             return $json([], 500);
         });
     }
@@ -150,6 +154,13 @@ final class OnboardingTest extends DbTestCase
         $this->assertSame(['onb:use', 'onb:plan'], [$res['data']['components'][0]['components'][0]['custom_id'], $res['data']['components'][1]['components'][0]['custom_id']]);
         $this->assertSame(10, $res['data']['components'][0]['components'][0]['max_values']);
         $this->assertSame(6, $res['data']['components'][0]['components'][0]['type']);
+    }
+
+    public function testCommandWithRsiSidConnectsOrgAndNamesItInTheReply(): void
+    {
+        $res = $this->json($this->post($this->command('8', ['data' => ['name' => 'einrichten', 'options' => [['name' => 'rsi_kuerzel', 'type' => 3, 'value' => 'expg']]]])));
+        $this->assertStringContainsString('RSI-Orga „Explorer Germany“ verbunden', $res['data']['content']);
+        $this->assertSame('EXPG', Db::val('SELECT rsi_sid FROM organizations'));
     }
 
     public function testCommandIsRepeatableAndReusesExistingOrg(): void

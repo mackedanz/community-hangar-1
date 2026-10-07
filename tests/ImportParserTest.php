@@ -83,6 +83,18 @@ final class ImportParserTest extends TestCase
 
     // --- parseExport -------------------------------------------------------------------------
 
+    public function testOnlyValidRsiHandlesAreTakenOver(): void
+    {
+        foreach (['SpaceFan', 'Space_Fan-2', ' Trim_Me '] as $ok) {
+            $this->assertSame(trim($ok), Parser::parse(['handle' => $ok] + self::exportV2())['handle']);
+        }
+        foreach (['', 'x', 'Space Fan', '<script>', '../x', str_repeat('a', 101), 123, ['a']] as $bad) {
+            $parsed = Parser::parse(['handle' => $bad] + self::exportV2());
+            $this->assertNull($parsed['handle'], 'ungültig: ' . json_encode($bad));
+            $this->assertNotEmpty($parsed['entries'], 'der Import selbst läuft trotzdem');
+        }
+    }
+
     public function testReadsV2AndUpgradesBecomeOwnEntry(): void
     {
         $parsed = Parser::parse(self::exportV2());

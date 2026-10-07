@@ -146,14 +146,14 @@ final class DiscordController extends Controller
             return self::panel($org, self::REPLY, 'RSI-Orga nicht übernommen: ' . $e->getMessage());
         }
         $org = Orgs::find((string) $org['id']) ?? $org;
-        $res = self::panel($org, self::REPLY, "RSI-Orga „$name“ verbunden, die Mitgliederliste wird abgeglichen …");
+        $res = self::panel($org, self::REPLY, "RSI-Orga „{$name}“ verbunden, die Mitgliederliste wird abgeglichen …");
         $orgId = (string) $org['id'];
         $token = (string) ($i['token'] ?? '');
         // Der Abgleich dauert einige Sekunden (eine Abfrage je 32 Mitglieder), Discord lässt aber nur 3 Sekunden für die Antwort.
         $res->afterSend(static function () use ($orgId, $token, $name): void {
             try {
                 $r = RsiOrg::sync($orgId);
-                $note = "RSI-Orga „$name“ verbunden: {$r['members']} sichtbare Mitglieder, {$r['redacted']} verborgen.";
+                $note = "RSI-Orga „{$name}“ verbunden: {$r['members']} sichtbare Mitglieder, {$r['redacted']} verborgen.";
             } catch (OrgError $e) {
                 $note = 'RSI-Abgleich nicht möglich: ' . $e->getMessage();
             }
