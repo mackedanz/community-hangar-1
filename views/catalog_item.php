@@ -4,6 +4,7 @@
 /** @var ?string $imageSrc */
 /** @var array<string,string> $rows */
 /** @var ?string $webUrl */
+/** @var ?string $erkulUrl */
 /** @var list<string> $modules */
 /** @var list<array<string,mixed>> $owners */
 /** @var ?\Hangar\Viewer $viewer */
@@ -38,8 +39,12 @@ use Hangar\Http\View;
         </div>
       <?php endif; ?>
 
-      <?php if ($webUrl): ?>
-        <a href="<?= e($webUrl) ?>" target="_blank" rel="noopener noreferrer" class="inline-block text-sm text-indigo-400 hover:underline">Mehr Details ansehen</a>
+      <?php $linkBox = 'rounded border border-cyan-800/60 bg-teal-950/50 px-3 py-1.5 text-sm text-zinc-200 hover:border-cyan-500/80'; ?>
+      <?php if ($webUrl || $erkulUrl): ?>
+        <div class="flex flex-wrap gap-2">
+          <?php if ($webUrl): ?><a href="<?= e($webUrl) ?>" target="_blank" rel="noopener noreferrer" class="<?= $linkBox ?>">RSI Seite ↗</a><?php endif; ?>
+          <?php if ($erkulUrl): ?><a href="<?= e($erkulUrl) ?>" target="_blank" rel="noopener noreferrer" class="<?= $linkBox ?>" title="DPS-Rechner und Ausrüstung bei Erkul">Erkul ↗</a><?php endif; ?>
+        </div>
       <?php endif; ?>
     </div>
   </div>

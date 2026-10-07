@@ -16,3 +16,10 @@ try {
     fwrite(STDERR, 'Katalog-Sync fehlgeschlagen: ' . $e->getMessage() . "\n");
     exit(1);
 }
+
+// Namenstabelle für die Erkul-Links (optional; bei Fehlern bleibt die bisherige Tabelle)
+try {
+    echo sprintf("ERKUL  %d Zuordnungen aktualisiert\n", Hangar\Catalog\Erkul::refresh());
+} catch (Throwable $e) {
+    fwrite(STDERR, 'Erkul-Tabelle nicht aktualisiert: ' . $e->getMessage() . "\n");
+}

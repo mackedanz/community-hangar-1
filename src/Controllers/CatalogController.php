@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Hangar\Controllers;
 
 use Hangar\Auth;
+use Hangar\Catalog\Erkul;
 use Hangar\Community;
 use Hangar\Constants;
 use Hangar\Db;
@@ -110,6 +111,7 @@ final class CatalogController extends Controller
             'imageSrc' => Community::imageSrc($kind, $item['slug'], $item['image_url']),
             'rows' => $rows,
             'webUrl' => is_string($data['webUrl'] ?? null) ? $data['webUrl'] : null,
+            'erkulUrl' => $kind === 'SHIP' ? Erkul::url((string) $item['name'], $item['manufacturer'] ?? null) : null,
             'modules' => array_column($modules, 'name'),
             'owners' => Community::getOwners($item['id'], $viewer),
         ], $item['name']);
