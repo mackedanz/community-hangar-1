@@ -16,7 +16,7 @@ $labels = ['career' => 'Karriere', 'role' => 'Rolle', 'status' => 'Status', 'siz
 $input = 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm';
 $filtering = $q !== '' || array_diff_key($filter, ['q' => 1]) !== [];
 ?>
-<form method="get" action="<?= e($action) ?>" class="flex flex-wrap items-end gap-3 rounded border border-zinc-800 p-3">
+<form method="get" action="<?= e($action) ?>" data-autofilter class="flex flex-wrap items-end gap-3 rounded border border-zinc-800 p-3">
   <?php foreach ($hidden as $k => $v): ?><input type="hidden" name="<?= e($k) ?>" value="<?= e($v) ?>"><?php endforeach; ?>
   <label class="flex w-full flex-col gap-1 text-xs text-zinc-400 sm:w-64">Suche
     <input type="search" name="q" value="<?= e($q) ?>" maxlength="100" placeholder="<?= e($placeholder) ?>" class="<?= $input ?>">

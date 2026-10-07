@@ -79,5 +79,52 @@
     if (msg && !window.confirm(msg)) e.preventDefault();
   });
 
+  // Filterleisten (<form data-autofilter>): Auswahlen wirken sofort, Texteingaben nach kurzer Pause.
+  // Ohne JavaScript bleibt der "Filtern"-Knopf sichtbar und das Formular funktioniert wie bisher.
+  (function () {
+    var forms = document.querySelectorAll("form[data-autofilter]");
+    if (!forms.length) return;
+    var timer = null;
+
+    function submit(form, field) {
+      clearTimeout(timer);
+      try {
+        if (field && field.name) sessionStorage.setItem("filter-focus", field.name);
+      } catch (err) {
+        /* Speichern nicht möglich: nur der Cursor springt nicht zurück ins Feld. */
+      }
+      if (form.requestSubmit) form.requestSubmit();
+      else form.submit();
+    }
+
+    forms.forEach(function (form) {
+      var button = form.querySelector('button[type="submit"]');
+      if (button) button.classList.add("hidden");
+      form.addEventListener("change", function (e) {
+        if (e.target.matches("select")) submit(form, null);
+        else if (e.target.matches('input[type="number"]')) submit(form, e.target);
+      });
+      form.addEventListener("input", function (e) {
+        var t = e.target;
+        if (e.isComposing || !t.matches('input[type="search"], input[type="number"]')) return;
+        clearTimeout(timer);
+        timer = setTimeout(function () { submit(form, t); }, 600);
+      });
+    });
+
+    // Nach dem Neuladen den Cursor wieder in das Feld setzen, in dem getippt wurde
+    try {
+      var name = sessionStorage.getItem("filter-focus");
+      if (name) {
+        sessionStorage.removeItem("filter-focus");
+        var f = document.querySelector('form[data-autofilter] [name="' + name + '"]');
+        if (f) {
+          f.focus();
+          if (f.type === "search") f.setSelectionRange(f.value.length, f.value.length);
+        }
+      }
+    } catch (err) { /* egal */ }
+  })();
+
   paintToggles();
 })();
