@@ -72,8 +72,6 @@ final class App
         $r->post('/discord/interactions', [DiscordController::class, 'interactions'], false);
 
         // Orgas
-        $r->get('/orgs/new', [OrgController::class, 'newForm']);
-        $r->post('/orgs/new', [OrgController::class, 'create']);
         $r->post('/orgs/update', [OrgController::class, 'update']);
         $r->post('/orgs/delete', [OrgController::class, 'delete']);
         $r->post('/orgs/sync-allowlist', [OrgController::class, 'syncAllowlist']);

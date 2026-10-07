@@ -162,7 +162,7 @@ final class TokenAdminTest extends DbTestCase
         ServerAdmin::banGuild($this->userId, '800000000000000009', 'Fremd');
         $this->expectException(OrgError::class);
         $this->expectExceptionMessageMatches('/gesperrt/');
-        Orgs::create($this->otherId, '800000000000000009', ['name' => 'Neu', 'memberRoleIds' => []]);
+        \Hangar\Onboarding::ensureOrg('800000000000000009', $this->otherId, 'Neu');
     }
 
     public function testMultipleAdminsAsCommaSeparatedListTakeEffectImmediately(): void

@@ -262,71 +262,23 @@ final class OrgsTest extends DbTestCase
 
     // --- Orga anlegen und verwalten ----------------------------------------------------------
 
-    public function testRejectsNonAdmins(): void
-    {
-        $user = $this->mkDiscordUser();
-        $this->discord->guilds = [FakeDiscord::guild('g-new-1', ['permissions' => '1024'])];
-        $this->expectException(OrgError::class);
-        Orgs::create($user['id'], 'g-new-1', ['name' => 'Test', 'memberRoleIds' => ['']]);
-    }
-
-    public function testRejectsServersTheUserIsNotOn(): void
-    {
-        $user = $this->mkDiscordUser();
-        $this->expectException(OrgError::class);
-        Orgs::create($user['id'], 'g-fremd-2', ['name' => 'Test', 'memberRoleIds' => ['']]);
-    }
-
-    public function testCreatesOrgMakesCreatorAdminAndPreventsDuplicates(): void
-    {
-        $user = $this->mkDiscordUser();
-        $this->discord->guilds = [FakeDiscord::guild('g-new-2', ['owner' => true, 'icon' => 'abc'])];
-
-        $org = Orgs::create($user['id'], 'g-new-2', ['name' => 'Explorer Germany', 'memberRoleIds' => ['123456789012345678']]);
-        $this->assertMatchesRegularExpression('/^explorer-germany/', $org['slug']);
-        $this->assertSame('https://cdn.discordapp.com/icons/g-new-2/abc.png', $org['icon_url']);
-        $this->assertSame(['g-new-2:ADMIN'], $this->orgsOf($user['id']));
-
-        $this->expectException(OrgError::class);
-        Orgs::create($user['id'], 'g-new-2', ['name' => 'Nochmal', 'memberRoleIds' => ['']]);
-    }
-
     public function testStoresUpToTenRolesIgnoringEmptyAndDuplicates(): void
     {
-        $user = $this->mkDiscordUser();
-        $this->discord->guilds = [FakeDiscord::guild('g-new-4', ['owner' => true])];
         $a = '111111111111111111';
         $b = '222222222222222222';
-        $org = Orgs::create($user['id'], 'g-new-4', ['name' => 'Mehrrollen', 'memberRoleIds' => [$a, '', $b, $a, '']]);
-        $this->assertSame("$a,$b", $org['member_role_ids']);
+        $this->assertSame("$a,$b", Orgs::cleanRoleIds([$a, '', $b, $a, '']));
 
-        $this->discord->guilds = [FakeDiscord::guild('g-new-5', ['owner' => true])];
         $eleven = array_map(fn ($d) => str_repeat((string) ($d % 10), 18), range(1, 11));
         $eleven[9] = '1010101010101010101';
         $eleven[10] = '2020202020202020202';
         $this->expectException(OrgError::class);
-        Orgs::create($user['id'], 'g-new-5', ['name' => 'Zu viele', 'memberRoleIds' => $eleven]);
+        Orgs::cleanRoleIds($eleven);
     }
 
     public function testRoleIdFormatIsChecked(): void
     {
-        $user = $this->mkDiscordUser();
-        $this->discord->guilds = [FakeDiscord::guild('g-new-3', ['owner' => true])];
         $this->expectException(OrgError::class);
-        Orgs::create($user['id'], 'g-new-3', ['name' => 'Test', 'memberRoleIds' => ['Mitglied']]);
-    }
-
-    public function testBannedGuildCannotBeCreatedAndNoDiscordCallIsMade(): void
-    {
-        $user = $this->mkDiscordUser();
-        Db::insert('banned_guilds', ['discord_guild_id' => 'g-ban', 'name' => 'X', 'banned_by_id' => 'a']);
-        try {
-            Orgs::create($user['id'], 'g-ban', ['name' => 'Test', 'memberRoleIds' => []]);
-            $this->fail('Sperre nicht beachtet');
-        } catch (OrgError $e) {
-            $this->assertStringContainsString('gesperrt', $e->getMessage());
-        }
-        $this->assertSame([], $this->discord->calls);
+        Orgs::cleanRoleIds(['Mitglied']);
     }
 
     public function testOnlyAdminsChangeOrDeleteAndNewRoleForcesRecheck(): void

@@ -44,23 +44,6 @@ final class OrgController extends Controller
         };
     }
 
-    // --- Orga anlegen ------------------------------------------------------------------------
-
-    public static function newForm(Request $req): Response
-    {
-        $viewer = Auth::requireViewer($req);
-        $guilds = [];
-        $problem = null;
-        try {
-            $guilds = Orgs::listAdminGuildsForSetup($viewer->id);
-        } catch (DiscordAuthError) {
-            $problem = 'Discord-Zugriff abgelaufen. Bitte melde dich ab und neu mit Discord an.';
-        } catch (DiscordUnavailableError) {
-            $problem = 'Discord ist gerade nicht erreichbar. Versuche es gleich noch einmal.';
-        }
-        return self::page('org_new', ['guilds' => $guilds, 'problem' => $problem, 'form' => self::formValues($req)], 'Orga anlegen');
-    }
-
     /** Rollen-ID-Felder und die danebenstehenden Namensfelder (gleiche Reihenfolge) zu {id: name}. @param mixed $ids @param mixed $names @return array<string,string> */
     public static function roleNames(mixed $ids, mixed $names): array
     {
@@ -74,29 +57,6 @@ final class OrgController extends Controller
             }
         }
         return $out;
-    }
-
-    /** Eingabewerte zum Wiederanzeigen nach einem Fehler. @return array<string,mixed> */
-    private static function formValues(Request $req): array
-    {
-        return [];
-    }
-
-    public static function create(Request $req): Response
-    {
-        $viewer = Auth::requireViewer($req);
-        try {
-            $org = Orgs::create($viewer->id, (string) $req->input('guildId', ''), [
-                'name' => (string) $req->input('name', ''),
-                'memberRoleIds' => $req->post['memberRoleIds'] ?? [],
-                'roleNames' => self::roleNames($req->post['memberRoleIds'] ?? [], $req->post['memberRoleNames'] ?? []),
-            ]);
-        } catch (\Throwable $e) {
-            return Flash::error('/orgs/new', self::errorMessage($e));
-        }
-        // Mitgliedschaft des Erstellers ist angelegt; Viewer neu laden
-        Auth::reset();
-        return Response::redirect('/o/' . $org['slug']);
     }
 
     // --- Orga verwalten ----------------------------------------------------------------------

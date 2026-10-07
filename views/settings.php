@@ -42,7 +42,6 @@ $select = function (string $name, string $value) use ($labels): string {
         <input type="hidden" name="back" value="settings">
         <button class="rounded bg-indigo-600 px-3 py-2 text-sm font-medium hover:bg-indigo-500">Mitgliedschaft jetzt prüfen</button>
       </form>
-      <a href="/orgs/new" class="rounded bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700">Orga anlegen</a>
     </div>
   </section>
 

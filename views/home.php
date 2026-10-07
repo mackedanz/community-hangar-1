@@ -24,14 +24,13 @@
       <p>
         Du bist noch in keiner Orga. Die App erkennt deine Orga über euren Discord-Server: Du
         musst dort Mitglied sein und die Mitgliedsrolle haben, und ein Admin eures Servers muss
-        die Orga einmal hier anlegen.
+        die Orga einmal mit dem Discord-Bot (/einrichten) anlegen.
       </p>
       <div class="flex flex-wrap gap-3">
         <form method="post" action="/recheck">
           <input type="hidden" name="_csrf" value="<?= e($viewer->csrf ?? '') ?>">
           <button class="rounded bg-indigo-600 px-3 py-2 text-sm font-medium hover:bg-indigo-500">Mitgliedschaft jetzt prüfen</button>
         </form>
-        <a href="/orgs/new" class="rounded bg-zinc-800 px-3 py-2 hover:bg-zinc-700">Orga anlegen (für Server-Admins)</a>
       </div>
     </section>
   <?php endif; ?>
