@@ -8,7 +8,7 @@
 }
 
 /* Platz für den Rollbalken immer freihalten, damit zentrierter Inhalt zwischen kurzen und langen Seiten nicht springt. */
-html {
+#page-scroll {
   scrollbar-gutter: stable;
 }
 
