@@ -6,8 +6,8 @@
 $rsiLook = [
     'main' => ['border-emerald-600/70 hover:border-emerald-400', 'In der RSI-Orga (Hauptorga)'],
     'affiliate' => ['border-cyan-600/70 hover:border-cyan-400', 'In der RSI-Orga als Affiliate'],
-    'out' => ['border-red-700/70 hover:border-red-500', 'Nicht in der Mitgliederliste der RSI-Orga gefunden'],
-    'unknown' => ['border-zinc-600 hover:border-zinc-400', 'RSI-Zugehörigkeit nicht prüfbar (verborgen oder kein Handle ableitbar)'],
+    'out' => ['border-yellow-600/70 hover:border-yellow-400', 'Nicht in der Mitgliederliste der RSI-Orga gefunden'],
+    'unknown' => ['border-red-700/70 hover:border-red-500', 'RSI-Zugehörigkeit nicht prüfbar (verborgen oder kein Handle ableitbar)'],
 ];
 $hasRsi = $members !== [] && $members[0]['rsiStatus'] !== null;
 ?>
@@ -19,8 +19,8 @@ $hasRsi = $members !== [] && $members[0]['rsiStatus'] !== null;
       <span>Rahmen = Zugehörigkeit zur RSI-Orga<?= !empty($rsiOrgName) ? ' „' . e($rsiOrgName) . '“' : '' ?>:</span>
       <span class="flex items-center gap-1"><i class="inline-block h-3 w-3 rounded-sm border border-emerald-600"></i> Mitglied</span>
       <span class="flex items-center gap-1"><i class="inline-block h-3 w-3 rounded-sm border border-cyan-600"></i> Affiliate</span>
-      <span class="flex items-center gap-1"><i class="inline-block h-3 w-3 rounded-sm border border-red-700"></i> nicht gefunden</span>
-      <span class="flex items-center gap-1"><i class="inline-block h-3 w-3 rounded-sm border border-zinc-600"></i> nicht prüfbar</span>
+      <span class="flex items-center gap-1"><i class="inline-block h-3 w-3 rounded-sm border border-yellow-600"></i> nicht gefunden</span>
+      <span class="flex items-center gap-1"><i class="inline-block h-3 w-3 rounded-sm border border-red-700"></i> nicht prüfbar</span>
     </p>
   <?php endif; ?>
   <ul class="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
