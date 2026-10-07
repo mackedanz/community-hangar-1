@@ -140,6 +140,19 @@ final class CommunityTest extends DbTestCase
         $this->assertInstanceOf(\DateTimeImmutable::class, $p['lastSync']);
     }
 
+    public function testProfileShowsOnlyShipsNotGearOrPaints(): void
+    {
+        $uid = $this->u['A-Mem'];
+        Db::insert('owned_items', ['id' => new_id(), 'user_id' => $uid, 'kind' => 'ARMOR', 'custom_name' => 'Helm']);
+        Db::insert('owned_items', ['id' => new_id(), 'user_id' => $uid, 'kind' => 'PAINT', 'custom_name' => 'Lack']);
+        Db::insert('owned_items', ['id' => new_id(), 'user_id' => $uid, 'kind' => 'ITEM', 'custom_name' => 'Kram']);
+        $p = Community::getProfile($uid, $this->both);
+        $this->assertSame(['SHIP'], array_values(array_unique(array_column($p['items'], 'kind'))));
+        $this->assertCount(1, $p['items']);
+        $own = Community::getProfile($uid, $this->a1);
+        $this->assertSame(['SHIP'], array_values(array_unique(array_column($own['items'], 'kind'))), 'auch im eigenen Profil nur Schiffe');
+    }
+
     public function testSameOrgSeesNoContentOfPrivateProfile(): void
     {
         $p = Community::getProfile($this->u['A-Priv'], $this->a1);

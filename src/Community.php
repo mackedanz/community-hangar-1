@@ -207,7 +207,8 @@ final class Community
         return [
             'user' => ['id' => $user['id'], 'name' => $user['name'], 'image' => $user['image'], 'rsiHandle' => $rsiHandle,
                 'rsiUrl' => $rsiHandle !== null ? Constants::RSI_BASE_URL . '/en/citizens/' . rawurlencode($rsiHandle) : null],
-            'items' => $showHangar ? Hangar::listHangar($userId) : null,
+            // Das Profil zeigt nur Schiffe; Ausrüstung, Paints und Sonstiges bleiben dem eigenen Hangar vorbehalten.
+            'items' => $showHangar ? array_values(array_filter(Hangar::listHangar($userId), static fn (array $e): bool => $e['kind'] === 'SHIP')) : null,
             'achievements' => $showAch ? Db::all(
                 'SELECT a.title, a.description, ua.earned_at FROM user_achievements ua JOIN achievements a ON a.id = ua.achievement_id
                   WHERE ua.user_id = ? ORDER BY ua.earned_at ASC',
