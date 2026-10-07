@@ -191,6 +191,30 @@ final class EventsTest extends DbTestCase
         $this->assertNull(Events::getEvent($this->orgA, $this->viewer('Member', [$this->orgA]), $e['id'])['myRsvp']);
     }
 
+    public function testMemberClaimsAndReleasesSlots(): void
+    {
+        $e = Events::save($this->u['Admin'], $this->orgA, $this->input([
+            'ships' => [['customName' => 'Kraken', 'slots' => [['label' => 'Pilot'], ['label' => 'Copilot']]]],
+        ]));
+        $view = fn (string $n) => Events::getEvent($this->orgA, $this->viewer($n, [$this->orgA]), $e['id']);
+        $slots = $view('Member')['ships'][0]['slots'];
+
+        $this->fails(fn () => Events::claimSlot($this->u['Member'], $this->orgA, $e['id'], $slots[0]['id']), 'Eintragen ohne Zusage');
+        Events::setRsvp($this->u['Member'], $this->orgA, $e['id'], 'YES');
+        Events::setRsvp($this->u['Planer'], $this->orgA, $e['id'], 'YES');
+        Events::claimSlot($this->u['Member'], $this->orgA, $e['id'], $slots[0]['id']);
+        $this->fails(fn () => Events::claimSlot($this->u['Planer'], $this->orgA, $e['id'], $slots[0]['id']), 'Doppelt vergebener Platz');
+        $this->fails(fn () => Events::claimSlot($this->u['Fremd'], $this->orgA, $e['id'], $slots[1]['id']), 'Fremder trägt sich ein');
+
+        Events::claimSlot($this->u['Member'], $this->orgA, $e['id'], $slots[1]['id']);   // wechselt den Platz
+        $now = $view('Member')['ships'][0]['slots'];
+        $this->assertNull($now[0]['userId']);
+        $this->assertSame($this->u['Member'], $now[1]['userId']);
+
+        Events::setRsvp($this->u['Member'], $this->orgA, $e['id'], 'MAYBE');            // Absage räumt den Platz
+        $this->assertNull($view('Member')['ships'][0]['slots'][1]['userId']);
+    }
+
     public function testPlanningShowsServerNicknames(): void
     {
         Db::run('UPDATE org_memberships SET nick = ? WHERE user_id = ? AND org_id = ?', ['Maverick', $this->u['Member'], $this->orgA]);

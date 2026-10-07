@@ -212,6 +212,7 @@ final class Events
         }
         if ($status === 'NONE') {
             Db::run('DELETE FROM event_rsvps WHERE event_id = ? AND user_id = ?', [$eventId, $userId]);
+            self::releaseSlots($userId, $eventId);
             return;
         }
         if (!in_array($status, Constants::RSVP_STATUSES, true)) {
@@ -221,6 +222,50 @@ final class Events
             'INSERT INTO event_rsvps (event_id, user_id, status) VALUES (?,?,?) ON DUPLICATE KEY UPDATE status = VALUES(status)',
             [$eventId, $userId, $status],
         );
+        if ($status !== 'YES') {
+            self::releaseSlots($userId, $eventId);
+        }
+    }
+
+    private static function releaseSlots(string $userId, string $eventId): void
+    {
+        Db::run(
+            'UPDATE event_slots x JOIN event_ships s ON s.id = x.event_ship_id SET x.user_id = NULL WHERE s.event_id = ? AND x.user_id = ?',
+            [$eventId, $userId],
+        );
+    }
+
+    /**
+     * Trägt das Mitglied in einen offenen Platz ein (nur mit Zusage "Dabei"). Ein früherer Platz im selben Event wird frei.
+     * $slotId = null gibt den eigenen Platz frei.
+     */
+    public static function claimSlot(string $userId, string $orgId, string $eventId, ?string $slotId): void
+    {
+        self::requireMember($userId, $orgId);
+        $ev = Db::one('SELECT status FROM events WHERE id = ? AND org_id = ?', [$eventId, $orgId]);
+        if ($ev === null) {
+            throw new EventError('Event nicht gefunden.');
+        }
+        if ($slotId === null) {
+            self::releaseSlots($userId, $eventId);
+            return;
+        }
+        if ($ev['status'] === 'CANCELLED') {
+            throw new EventError('Das Event ist abgesagt.');
+        }
+        if (Db::val("SELECT 1 FROM event_rsvps WHERE event_id = ? AND user_id = ? AND status = 'YES'", [$eventId, $userId]) === null) {
+            throw new EventError('Sage zuerst mit „Dabei“ zu.');
+        }
+        Db::transaction(function () use ($userId, $eventId, $slotId): void {
+            $ok = Db::val('SELECT 1 FROM event_slots x JOIN event_ships s ON s.id = x.event_ship_id WHERE x.id = ? AND s.event_id = ?', [$slotId, $eventId]);
+            if ($ok === null) {
+                throw new EventError('Platz nicht gefunden.');
+            }
+            self::releaseSlots($userId, $eventId);
+            if (Db::exec('UPDATE event_slots SET user_id = ? WHERE id = ? AND user_id IS NULL', [$userId, $slotId]) === 0) {
+                throw new EventError('Der Platz ist schon vergeben.');
+            }
+        });
     }
 
     // ---------------------------------------------------------------------------------------
@@ -354,6 +399,7 @@ final class Events
             ], $shipRows),
             'rsvps' => $rsvps,
             'myRsvp' => $mine,
+            'viewerId' => $viewer->id,
         ];
     }
 

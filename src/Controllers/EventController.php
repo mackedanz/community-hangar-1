@@ -146,6 +146,19 @@ final class EventController extends Controller
         return Response::redirect($to);
     }
 
+    public static function slot(Request $req, array $p): Response
+    {
+        [$viewer, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
+        $to = '/o/' . $org['slug'] . '/events/' . $p['id'];
+        $slotId = trim((string) $req->input('slot', ''));
+        try {
+            Events::claimSlot($viewer->id, $org['id'], (string) $p['id'], $slotId === '' ? null : $slotId);
+        } catch (EventError $e) {
+            return Flash::error($to, $e->getMessage());
+        }
+        return Response::redirect($to);
+    }
+
     public static function cancel(Request $req, array $p): Response
     {
         [$viewer, $org] = Auth::requireOrgMember($req, (string) $p['slug']);

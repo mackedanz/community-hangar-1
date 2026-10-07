@@ -8,6 +8,9 @@ use Hangar\EventTime;
 $base = '/o/' . $org['slug'] . '/events';
 $labels = ['YES' => 'Dabei', 'MAYBE' => 'Vielleicht', 'NO' => 'Kann nicht'];
 $my = $event['myRsvp'];
+$canClaim = $my === 'YES' && !$event['cancelled'];
+$hasSlot = false;
+foreach ($event['ships'] as $sh) { foreach ($sh['slots'] as $sl) { if ($sl['userId'] === $event['viewerId']) { $hasSlot = true; } } }
 ?>
 <div class="space-y-8">
   <div class="space-y-2">
@@ -48,6 +51,9 @@ $my = $event['myRsvp'];
         </form>
       <?php endforeach; ?>
     </div>
+    <?php if ($canClaim && $event['ships'] && !$hasSlot): ?>
+      <p class="rounded border border-indigo-500/60 bg-indigo-500/10 p-2 text-sm">Du bist dabei. Wähle unten bei einem Schiff einen offenen Platz mit „Eintragen“.</p>
+    <?php endif; ?>
     <ul class="space-y-1 text-sm text-zinc-300">
       <?php foreach ($labels as $s => $label):
           $names = array_column(array_filter($event['rsvps'], fn ($r) => $r['status'] === $s), 'name'); ?>
@@ -70,9 +76,22 @@ $my = $event['myRsvp'];
             <div class="min-w-0 flex-1 space-y-1">
               <div class="font-medium"><?php if ($s['href']): ?><a href="<?= e($s['href']) ?>" class="hover:underline"><?= e($s['name']) ?></a><?php else: ?><?= e($s['name']) ?><?php endif; ?></div>
               <?php if ($s['task']): ?><div class="text-xs text-zinc-400"><?= e($s['task']) ?></div><?php endif; ?>
-              <ul class="text-sm">
+              <ul class="mt-1 grid grid-cols-[max-content_minmax(0,1fr)_max-content] items-center gap-x-3 gap-y-1 text-sm">
                 <?php foreach ($s['slots'] as $x): ?>
-                  <li><span class="text-zinc-500"><?= e($x['label']) ?>:</span> <?= $x['userName'] !== null ? e($x['userName']) : '<span class="text-zinc-500">offen</span>' ?></li>
+                  <?php $mineSlot = $x['userId'] === $event['viewerId']; ?>
+                  <li class="contents">
+                    <span class="text-zinc-500"><?= e($x['label']) ?></span>
+                    <span class="truncate <?= $mineSlot ? 'font-semibold text-indigo-400' : '' ?>"><?= $x['userName'] !== null ? e($x['userName']) : '<span class="text-zinc-600">offen</span>' ?></span>
+                    <?php if ($canClaim && ($x['userName'] === null || $mineSlot)): ?>
+                      <form method="post" action="<?= e($base . '/' . $event['id']) ?>/slot" class="justify-self-end">
+                        <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                        <input type="hidden" name="slot" value="<?= $mineSlot ? '' : e($x['id']) ?>">
+                        <button class="w-24 rounded border py-0.5 text-xs transition <?= $mineSlot ? 'border-zinc-600 text-zinc-300 hover:bg-zinc-800' : 'border-indigo-500/70 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/30' ?>"><?= $mineSlot ? 'Austragen' : 'Eintragen' ?></button>
+                      </form>
+                    <?php else: ?>
+                      <span></span>
+                    <?php endif; ?>
+                  </li>
                 <?php endforeach; ?>
               </ul>
             </div>
