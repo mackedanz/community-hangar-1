@@ -255,6 +255,32 @@ final class Events
     }
 
     /**
+     * Events für die Zeitleiste: ab $from für $months Monate, mit Ersteller (inkl. abgesagter).
+     * @return list<array{id:string,title:string,startsAt:DateTimeImmutable,endsAt:?DateTimeImmutable,cancelled:bool,shipCount:int,yes:int,by:string}>
+     */
+    public static function listTimeline(string $orgId, ?Viewer $viewer, DateTimeImmutable $from, int $months = 12): array
+    {
+        if (!self::isMemberOf($orgId, $viewer)) {
+            return [];
+        }
+        $to = $from->modify('+' . $months . ' months');
+        $rows = Db::all(
+            "SELECT e.id, e.title, e.starts_at, e.ends_at, e.status, COALESCE(om.nick, u.name) AS creator,
+                    (SELECT COUNT(*) FROM event_ships s WHERE s.event_id = e.id) AS ship_count,
+                    (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'YES') AS yes_count
+               FROM events e LEFT JOIN users u ON u.id = e.created_by_id
+               LEFT JOIN org_memberships om ON om.user_id = e.created_by_id AND om.org_id = e.org_id
+              WHERE e.org_id = ? AND e.starts_at >= ? AND e.starts_at < ? ORDER BY e.starts_at ASC",
+            [$orgId, Time::db($from), Time::db($to)],
+        );
+        return array_map(fn ($e) => [
+            'id' => $e['id'], 'title' => $e['title'], 'startsAt' => Time::parse($e['starts_at']), 'endsAt' => Time::parse($e['ends_at']),
+            'cancelled' => $e['status'] === 'CANCELLED', 'shipCount' => (int) $e['ship_count'], 'yes' => (int) $e['yes_count'],
+            'by' => (string) ($e['creator'] ?? 'Unbekannt'),
+        ], $rows);
+    }
+
+    /**
      * Die nächsten anstehenden Events (ohne abgesagte).
      * @return list<array{id:string,title:string,startsAt:DateTimeImmutable,endsAt:?DateTimeImmutable}>
      */

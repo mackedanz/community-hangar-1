@@ -45,9 +45,9 @@
     return b;
   }
 
-  /* Besatzungsplätze passend zur Schiffsgröße: Pilot, Copilot, dann Crew 3 … */
-  function defaultSlots(crewMin) {
-    var n = Math.max(1, Math.min(crewMin || 1, 8));
+  /* Besatzungsplätze passend zur Schiffsgröße: Pilot, Copilot, dann Crew 3 … (bis maximale Besatzung, höchstens 12) */
+  function defaultSlots(crewMax) {
+    var n = Math.max(1, Math.min(crewMax || 1, 12));
     var out = [];
     for (var i = 0; i < n; i++) out.push({ label: i === 0 ? "Pilot" : i === 1 ? "Copilot" : "Crew " + (i + 1), userId: "" });
     return out;
@@ -142,7 +142,7 @@
       li.appendChild(button("Hinzufügen", function () {
         ships.push({
           catalogItemId: f.catalogItemId, customName: f.catalogItemId ? null : f.name, name: f.name,
-          task: "", slots: defaultSlots(f.crewMin),
+          task: "", slots: defaultSlots(f.crewMax != null ? f.crewMax : f.crewMin),
         });
         renderShips();
       }));

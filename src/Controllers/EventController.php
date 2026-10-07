@@ -33,35 +33,33 @@ final class EventController extends Controller
     public static function index(Request $req, array $p): Response
     {
         [$viewer, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
-        [$y, $m] = self::parseMonth($req->query('month'));
-        $first = new DateTimeImmutable(sprintf('%04d-%02d-01', $y, $m));
-        $prev = $first->modify('-1 month');
-        $next = $first->modify('+1 month');
-        $from = EventTime::parseBerlinLocal($first->format('Y-m') . '-01T00:00') ?? throw HttpException::notFound();
-        $to = EventTime::parseBerlinLocal($next->format('Y-m') . '-01T00:00') ?? throw HttpException::notFound();
-
-        $events = Events::listEvents($org['id'], $viewer, $from, $to);
-        $byDay = [];
-        foreach ($events as $e) {
-            $byDay[EventTime::dayKey($e['startsAt'])][] = $e;
-        }
-        $daysInMonth = (int) $first->format('t');
-        $lead = ((int) $first->format('N')) - 1;      // Wochen ab Montag
-        $cells = array_merge(array_fill(0, $lead, null), range(1, $daysInMonth));
-        while (count($cells) % 7 !== 0) {
-            $cells[] = null;
-        }
-
         return OrgController::orgPage($org, 'events_index', [
-            'month' => self::MONTHS[$m - 1] . ' ' . $y,
-            'monthKey' => $first->format('Y-m'),
-            'prevKey' => $prev->format('Y-m'),
-            'nextKey' => $next->format('Y-m'),
-            'cells' => $cells,
-            'byDay' => $byDay,
             'today' => EventTime::dayKey(new DateTimeImmutable('now', new \DateTimeZone('UTC'))),
-            'upcoming' => Events::listUpcoming($org['id'], $viewer),
+            'timeline' => self::timeline($org['id'], $viewer),
         ], 'Planung', 'events');
+    }
+
+    /**
+     * Zwölf Monatsspalten ab dem aktuellen Monat (Berliner Zeit), jede mit ihren Events.
+     * @return list<array{key:string,label:string,events:list<array<string,mixed>>}>
+     */
+    private static function timeline(string $orgId, $viewer): array
+    {
+        [$y, $m] = self::parseMonth(null);
+        $start = new DateTimeImmutable(sprintf('%04d-%02d-01', $y, $m));
+        $from = EventTime::parseBerlinLocal($start->format('Y-m') . '-01T00:00') ?? throw HttpException::notFound();
+        $cols = [];
+        for ($i = 0; $i < 12; $i++) {
+            $d = $start->modify("+$i months");
+            $cols[$d->format('Y-m')] = ['key' => $d->format('Y-m'), 'label' => self::MONTHS[(int) $d->format('n') - 1] . ' ' . $d->format('Y'), 'events' => []];
+        }
+        foreach (Events::listTimeline($orgId, $viewer, $from, 12) as $e) {
+            $k = substr(EventTime::dayKey($e['startsAt']), 0, 7);
+            if (isset($cols[$k])) {
+                $cols[$k]['events'][] = $e;
+            }
+        }
+        return array_values($cols);
     }
 
     public static function show(Request $req, array $p): Response
