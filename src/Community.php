@@ -219,7 +219,8 @@ final class Community
 
     /**
      * RSI-Handle für den Link zum RSI-Profil: der per RSI-Sync übernommene, sonst einer aus den Discord-Namen
-     * (Nickname, Kontoname), der in der Mitgliederliste einer RSI-Orga tatsächlich vorkommt (nur dann ist er verbürgt).
+     * (Nickname, Kontoname), der in der Mitgliederliste einer RSI-Orga vorkommt. Findet sich keiner, gilt der
+     * Handle aus dem Server-Nickname, sofern eine der Orgas ein RSI-Kürzel hat (dort ist der Nickname der Handle).
      * @param array<string,mixed> $user @param list<string> $orgIds
      */
     private static function rsiHandleOf(array $user, array $orgIds): ?string
@@ -231,6 +232,10 @@ final class Community
             return null;
         }
         $names = array_column(Db::all('SELECT nick FROM org_memberships WHERE user_id = ?', [$user['id']]), 'nick');
+        $nickHandle = null;
+        foreach ($names as $n) {
+            $nickHandle ??= RsiOrg::handleFromName($n);
+        }
         $cands = array_values(array_unique(array_filter(array_map(
             static fn ($n): ?string => RsiOrg::handleFromName($n),
             [...$names, $user['name'] ?? null],
@@ -239,7 +244,11 @@ final class Community
             return null;
         }
         $h = Db::val('SELECT handle FROM org_rsi_members WHERE org_id IN (' . Db::in($orgIds) . ') AND handle IN (' . Db::in($cands) . ') LIMIT 1', [...$orgIds, ...$cands]);
-        return is_string($h) ? $h : null;
+        if (is_string($h)) {
+            return $h;
+        }
+        $hasRsiOrg = Db::val('SELECT 1 FROM organizations WHERE rsi_sid IS NOT NULL AND id IN (' . Db::in($orgIds) . ') LIMIT 1', $orgIds) !== null;
+        return $hasRsiOrg ? $nickHandle : null;
     }
 
     /** Zeitpunkt des letzten RSI-Syncs (null, wenn nie synchronisiert). */

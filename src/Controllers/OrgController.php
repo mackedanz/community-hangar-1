@@ -200,8 +200,18 @@ final class OrgController extends Controller
     public static function members(Request $req, array $p): Response
     {
         [$viewer, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
+        $all = Community::listMembers($org['id'], $viewer);
+        // Filter nach RSI-Status (Klick auf die Legende); die Anzahl je Status zählt über alle Mitglieder.
+        $counts = array_count_values(array_filter(array_column($all, 'rsiStatus')));
+        $rsi = (string) $req->query('rsi', '');
+        $rsi = in_array($rsi, ['main', 'affiliate', 'out', 'unknown'], true) ? $rsi : '';
+        $members = $rsi === '' ? $all : array_values(array_filter($all, static fn (array $m): bool => $m['rsiStatus'] === $rsi));
         return self::orgPage($org, 'org_members', [
-            'members' => Community::listMembers($org['id'], $viewer),
+            'members' => $members,
+            'total' => count($all),
+            'rsiFilter' => $rsi,
+            'rsiCounts' => $counts,
+            'hasRsi' => $all !== [] && $all[0]['rsiStatus'] !== null,
             'rsiOrgName' => Db::val('SELECT rsi_org_name FROM organizations WHERE id = ?', [$org['id']]),
         ], 'Mitglieder', 'members');
     }

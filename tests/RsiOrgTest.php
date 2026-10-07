@@ -197,6 +197,10 @@ final class RsiOrgTest extends DbTestCase
         $u = Community::getProfile($mc, $viewer)['user'];
         $this->assertSame('eXpG_McDance', $u['rsiHandle'], 'Schreibweise stammt aus der RSI-Liste');
         $this->assertSame('https://robertsspaceindustries.com/en/citizens/eXpG_McDance', $u['rsiUrl']);
-        $this->assertNull(Community::getProfile($stranger, $viewer)['user']['rsiUrl'], 'nicht verbürgter Handle wird nicht verlinkt');
+        // nicht in der RSI-Liste, aber der Nickname folgt der Server-Regel (Nickname = Handle): trotzdem verlinkt
+        $this->assertSame('https://robertsspaceindustries.com/en/citizens/Ben_Unbekannt', Community::getProfile($stranger, $viewer)['user']['rsiUrl']);
+        // ohne Nickname wird nichts geraten
+        $noNick = $mk('Cem_Handle', null);
+        $this->assertNull(Community::getProfile($noNick, $viewer)['user']['rsiUrl']);
     }
 }
