@@ -69,7 +69,7 @@ foreach ($event['ships'] as $sh) { foreach ($sh['slots'] as $sl) { if ($sl['user
     <?php else: ?>
       <ul class="grid gap-3 sm:grid-cols-2">
         <?php foreach ($event['ships'] as $s): ?>
-          <li class="flex gap-3 rounded border border-zinc-800 p-3">
+          <li class="flex gap-3 rounded border border-cyan-800/60 bg-teal-950/50 p-3 transition hover:border-cyan-500/80">
             <div class="h-14 w-20 shrink-0 overflow-hidden rounded bg-zinc-900">
               <?php if ($s['imageUrl']): ?><img src="<?= e($s['imageUrl']) ?>" alt="" loading="lazy" class="h-full w-full object-cover"><?php endif; ?>
             </div>
@@ -80,8 +80,8 @@ foreach ($event['ships'] as $sh) { foreach ($sh['slots'] as $sl) { if ($sl['user
                 <?php foreach ($s['slots'] as $x): ?>
                   <?php $mineSlot = $x['userId'] === $event['viewerId']; ?>
                   <li class="contents">
-                    <span class="text-zinc-500"><?= e($x['label']) ?></span>
-                    <span class="truncate <?= $mineSlot ? 'font-semibold text-indigo-400' : '' ?>"><?= $x['userName'] !== null ? e($x['userName']) : '<span class="text-zinc-600">offen</span>' ?></span>
+                    <span class="text-zinc-400"><?= e($x['label']) ?></span>
+                    <span class="truncate <?= $mineSlot ? 'font-semibold text-indigo-400' : '' ?>"><?= $x['userName'] !== null ? e($x['userName']) : '<span class="text-zinc-500">offen</span>' ?></span>
                     <?php if ($canClaim && ($x['userName'] === null || $mineSlot)): ?>
                       <form method="post" action="<?= e($base . '/' . $event['id']) ?>/slot" class="justify-self-end">
                         <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">

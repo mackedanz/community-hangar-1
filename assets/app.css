@@ -44,6 +44,9 @@
   --color-amber-200: #7b3306;
   --color-amber-400: #b75000;
   --color-amber-950: #fffbeb;
+  --color-teal-950: #d5f3f0;
+  --color-cyan-800: #0e8aa6;
+  --color-cyan-200: #0e5f73;
 }
 
 body {
