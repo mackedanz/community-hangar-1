@@ -200,11 +200,13 @@ final class Community
         if ($viewer->id !== $user['id'] && !Visibility::sharesOrg($orgIds, $viewer)) {
             return null;
         }
+        $rsiHandle = self::rsiHandleOf($user, $orgIds);
         $showHangar = Visibility::canView($user['hangar_visibility'], $user['id'], $orgIds, $viewer);
         $showAch = Visibility::canView($user['achievements_visibility'], $user['id'], $orgIds, $viewer);
 
         return [
-            'user' => ['id' => $user['id'], 'name' => $user['name'], 'image' => $user['image'], 'rsiHandle' => $user['rsi_handle']],
+            'user' => ['id' => $user['id'], 'name' => $user['name'], 'image' => $user['image'], 'rsiHandle' => $rsiHandle,
+                'rsiUrl' => $rsiHandle !== null ? Constants::RSI_BASE_URL . '/en/citizens/' . rawurlencode($rsiHandle) : null],
             'items' => $showHangar ? Hangar::listHangar($userId) : null,
             'achievements' => $showAch ? Db::all(
                 'SELECT a.title, a.description, ua.earned_at FROM user_achievements ua JOIN achievements a ON a.id = ua.achievement_id
@@ -213,6 +215,31 @@ final class Community
             ) : null,
             'lastSync' => $showHangar ? self::getLastSync($userId) : null,
         ];
+    }
+
+    /**
+     * RSI-Handle für den Link zum RSI-Profil: der per RSI-Sync übernommene, sonst einer aus den Discord-Namen
+     * (Nickname, Kontoname), der in der Mitgliederliste einer RSI-Orga tatsächlich vorkommt (nur dann ist er verbürgt).
+     * @param array<string,mixed> $user @param list<string> $orgIds
+     */
+    private static function rsiHandleOf(array $user, array $orgIds): ?string
+    {
+        if (is_string($user['rsi_handle']) && $user['rsi_handle'] !== '') {
+            return $user['rsi_handle'];
+        }
+        if ($orgIds === []) {
+            return null;
+        }
+        $names = array_column(Db::all('SELECT nick FROM org_memberships WHERE user_id = ?', [$user['id']]), 'nick');
+        $cands = array_values(array_unique(array_filter(array_map(
+            static fn ($n): ?string => RsiOrg::handleFromName($n),
+            [...$names, $user['name'] ?? null],
+        ))));
+        if ($cands === []) {
+            return null;
+        }
+        $h = Db::val('SELECT handle FROM org_rsi_members WHERE org_id IN (' . Db::in($orgIds) . ') AND handle IN (' . Db::in($cands) . ') LIMIT 1', [...$orgIds, ...$cands]);
+        return is_string($h) ? $h : null;
     }
 
     /** Zeitpunkt des letzten RSI-Syncs (null, wenn nie synchronisiert). */

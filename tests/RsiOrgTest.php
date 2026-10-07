@@ -175,4 +175,28 @@ final class RsiOrgTest extends DbTestCase
         $by = array_column(Community::listMembers($this->orgId, $viewer), 'rsiStatus', 'name');
         $this->assertEquals(['Cem der Große' => 'unknown', 'eXpG_McDance (Micha)' => 'main', 'Pilot_1' => 'main', 'Ben' => 'affiliate'], $by);
     }
+
+    public function testProfileLinksToRsiProfileWhenHandleIsKnownOrVerified(): void
+    {
+        $mk = function (string $name, ?string $nick, ?string $handle = null): string {
+            $u = $this->mkUser(['name' => $name, 'rsi_handle' => $handle]);
+            Db::insert('org_memberships', ['user_id' => $u['id'], 'org_id' => $this->orgId, 'role' => 'MEMBER', 'can_plan' => 0, 'nick' => $nick]);
+            return $u['id'];
+        };
+        $mc = $mk('Micha', 'expg_mcdance (Micha)');
+        $synced = $mk('Anna', 'Anna K', 'Anna_Real');
+        $stranger = $mk('Ben', 'Ben_Unbekannt');
+        $viewer = VisibilityFilterTest::viewer($mc, [$this->orgId]);
+
+        // ohne RSI-Orga nur der per Sync übernommene Handle
+        $this->assertNull(Community::getProfile($mc, $viewer)['user']['rsiUrl']);
+        $this->assertSame('https://robertsspaceindustries.com/en/citizens/Anna_Real', Community::getProfile($synced, $viewer)['user']['rsiUrl']);
+
+        RsiOrg::connect($this->orgId, 'EXPG');
+        RsiOrg::sync($this->orgId);
+        $u = Community::getProfile($mc, $viewer)['user'];
+        $this->assertSame('eXpG_McDance', $u['rsiHandle'], 'Schreibweise stammt aus der RSI-Liste');
+        $this->assertSame('https://robertsspaceindustries.com/en/citizens/eXpG_McDance', $u['rsiUrl']);
+        $this->assertNull(Community::getProfile($stranger, $viewer)['user']['rsiUrl'], 'nicht verbürgter Handle wird nicht verlinkt');
+    }
 }

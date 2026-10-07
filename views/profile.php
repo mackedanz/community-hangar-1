@@ -11,7 +11,10 @@ $u = $profile['user'];
     <?php if ($u['image']): ?><img src="<?= e($u['image']) ?>" alt="" class="h-16 w-16 rounded-full"><?php else: ?><div class="h-16 w-16 rounded-full bg-zinc-800"></div><?php endif; ?>
     <div>
       <h1 class="text-2xl font-bold"><?= e($u['name'] ?? 'Unbekannt') ?></h1>
-      <?php if ($u['rsiHandle']): ?><p class="text-sm text-zinc-400">RSI: <?= e($u['rsiHandle']) ?></p><?php endif; ?>
+      <?php if ($u['rsiUrl']): ?>
+        <a href="<?= e($u['rsiUrl']) ?>" target="_blank" rel="noopener noreferrer" title="RSI-Profil von <?= e($u['rsiHandle']) ?> öffnen"
+           class="mt-1 inline-block rounded border border-cyan-800/60 bg-teal-950/50 px-3 py-1 text-sm text-zinc-200 hover:border-cyan-500/80">RSI-Profil: <?= e($u['rsiHandle']) ?> ↗</a>
+      <?php endif; ?>
     </div>
   </div>
 
