@@ -10,7 +10,6 @@ use Hangar\Community;
 use Hangar\Config;
 use Hangar\Constants;
 use Hangar\Db;
-use Hangar\Hangar;
 use Hangar\Http\Flash;
 use Hangar\Http\HttpException;
 use Hangar\Http\Request;
@@ -92,10 +91,7 @@ final class SettingsController extends Controller
         if ($profile === null) {
             throw HttpException::notFound();
         }
-        return self::page('profile', [
-            'profile' => $profile,
-            'groups' => $profile['items'] !== null ? Hangar::groupByKind($profile['items']) : null,
-        ], (string) ($profile['user']['name'] ?? 'Profil'));
+        return self::page('profile', ['profile' => $profile, 'wide' => true], (string) ($profile['user']['name'] ?? 'Profil'));
     }
 
     public static function privacy(Request $req): Response
