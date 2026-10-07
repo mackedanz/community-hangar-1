@@ -81,7 +81,7 @@
   <p class="lead">Schritt für Schritt mit Bildern: eine eigene Instanz auf einem eigenen Server aufbauen, mit Discord-Anmeldung,
   Onboarding-Bot und dem ersten RSI-Sync. Du brauchst keine Programmierkenntnisse, aber du solltest auf einem Linux-Server
   Befehle eingeben können. Zeitaufwand: etwa 45 Minuten.</p>
-  <p class="meta">Stand: 06.10.2026 · Die Bilder stammen von einer echten Neuinstallation (Orga „SpaceTrotter“,
+  <p class="meta">Stand: 07.10.2026 · Die Bilder stammen von einer echten Neuinstallation (Orga „SpaceTrotter“,
   Adresse <code>expg.mcdance.de</code>). Persönliche Angaben, Kennungen und Geheimnisse sind geschwärzt.
   Überall, wo <code>expg.mcdance.de</code> steht, setzt du deine eigene Adresse ein.</p>
   <ol class="toc">
@@ -98,6 +98,7 @@
     <li>Anmelden</li>
     <li>Ersten RSI-Sync machen</li>
     <li>Betrieb und Updates</li>
+    <li>Betrieb absichern</li>
     <li>Wenn etwas nicht klappt</li>
   </ol>
 </header>
@@ -388,7 +389,77 @@ volumes:
   caddy-data:</pre>
 <p>Dann <code>docker compose up -d</code>. Den Reverse-Proxy aus Kapitel 5 brauchst du in diesem Fall nicht.</p>
 
-<h2><span class="no">14</span>Wenn etwas nicht klappt</h2>
+<h2 class="pb"><span class="no">14</span>Betrieb absichern</h2>
+<p>Die App selbst prüft Anmeldung, Rechte und Eingaben. Die folgenden Punkte betreffen den <b>Betrieb</b>: Server, Proxy und Netzwerk. Sie sind nach Wichtigkeit geordnet.
+Wie dringend sie sind, hängt davon ab, wo die App läuft:</p>
+<table>
+  <tr><th style="width:30%">Wo läuft die App?</th><th>Was heißt das</th></tr>
+  <tr><td>Server im Internet (Mietserver, VPS)</td><td>Jeder Punkt unten ist <b>Pflicht</b>. Besonders 14.1: Ohne diese Einstellung ist der App-Port für die ganze Welt offen und umgeht den Proxy.</td></tr>
+  <tr><td>Zuhause hinter einem Router</td><td>Von außen erreichbar ist nur, was du im Router weiterleitest. Die Punkte schützen dann vor Geräten im eigenen Netz und vor Fehlern bei der Weiterleitung.</td></tr>
+</table>
+
+<h3>14.1 Den App-Port nur für den Proxy erreichbar machen</h3>
+<p>Der Port <b>8181</b> spricht unverschlüsseltes HTTP und gehört nur dem Reverse-Proxy. Wer ihn direkt erreicht, umgeht den Proxy samt Zertifikat und Filtern.</p>
+<ul>
+  <li><b>Proxy läuft auf demselben Server:</b> trage in die <code>.env</code> <code>HANGAR_BIND=127.0.0.1</code> ein und starte mit <code>docker compose up -d</code> neu. Danach ist der Port nur noch auf dem Server selbst erreichbar.
+  Prüfen: <code>ss -ltn | grep 8181</code> zeigt <code>127.0.0.1:8181</code>.</li>
+  <li><b>Proxy läuft auf einem anderen Rechner:</b> Lass <code>HANGAR_BIND</code> leer (sonst erreicht der Proxy die App nicht) und erlaube den Port per Firewall nur für die IP des Proxys. Mit Docker greift das übliche <code>ufw</code> nicht von selbst, weil Docker seine Regeln selbst setzt.
+  Zuverlässig ist die Firewall des Hypervisors oder Routers (z. B. Proxmox-Firewall am Container: eingehend Port 8181 nur von der Proxy-IP, alles andere auf dem Port verwerfen) oder eine Regel in der Docker-Kette:</li>
+</ul>
+<pre class="file">sudo iptables -I DOCKER-USER -p tcp -m conntrack --ctorigdstport 8181 --ctdir ORIGINAL ! -s &lt;PROXY-IP&gt; -j DROP</pre>
+<p>Diese Regel verschwindet nach einem Neustart, wenn du sie nicht dauerhaft speicherst (z. B. mit <code>iptables-persistent</code>). Prüfe nach jeder Änderung von <b>einem dritten Rechner</b>, dass der Port wirklich zu ist:
+<code>curl -m 5 http://&lt;SERVER-IP&gt;:8181/healthz</code> darf nichts liefern. Von der Proxy-IP aus muss es weiter „ok“ geben.</p>
+
+<h3>14.2 Größenlimit im Proxy</h3>
+<p>Der größte echte Upload ist der RSI-Import mit bis zu 5 MB. Alles darüber nimmt die App nicht an (Apache lehnt ab 6 MB ab). Damit große Anfragen gar nicht erst bis zur App kommen, begrenze sie auch im Proxy.
+Im <b>Nginx Proxy Manager</b>: Proxy-Host bearbeiten, den Reiter mit dem <b>Zahnrad</b> öffnen („Advanced“), bei „Custom Nginx Configuration“ eintragen und mit <b>Save</b> speichern:</p>
+<pre class="file">client_max_body_size 6m;</pre>
+<p>Prüfen: Eine 7-MB-Anfrage muss mit <b>413</b> abgewiesen werden:</p>
+<pre class="file">head -c 7000000 /dev/zero | curl -s -o /dev/null -w "%{http_code}\n" -X POST -T - https://&lt;DOMAIN&gt;/healthz</pre>
+
+<h3>14.3 HSTS im Proxy einschalten</h3>
+<p>HSTS sagt dem Browser, dass die Seite nur noch über HTTPS geöffnet werden darf. Im Nginx Proxy Manager: Proxy-Host, Reiter <b>SSL</b>, <b>HSTS Enabled</b> einschalten und speichern.
+Schalte es erst ein, wenn HTTPS sicher läuft: Browser merken sich die Einstellung, und bei einem abgelaufenen Zertifikat kommt man dann nicht mehr „mal eben“ per HTTP auf die Seite.</p>
+
+<h3>14.4 SSH nur mit Schlüssel</h3>
+<p>Ein Server, der Anmeldungen per Passwort zulässt, wird im Internet rund um die Uhr durchprobiert, im Heimnetz reicht ein einziges kompromittiertes Gerät. Hinterlege zuerst deinen SSH-Schlüssel (<code>ssh-copy-id benutzer@server</code>) und teste die Anmeldung damit.
+Danach in <code>/etc/ssh/sshd_config</code> setzen:</p>
+<pre class="file">PermitRootLogin prohibit-password
+PasswordAuthentication no</pre>
+<p>Dann <code>sudo systemctl reload ssh</code>. <b>Lass dein aktuelles Fenster offen</b> und probiere die Anmeldung in einem zweiten Fenster, bevor du das erste schließt. Prüfen: <code>sudo sshd -T | grep -iE 'passwordauthentication|permitrootlogin'</code>.</p>
+
+<h3>14.5 Verwaltungsoberflächen und Router</h3>
+<ul>
+  <li><b>Portainer, Nginx-Proxy-Manager-Oberfläche (Port 81) und ähnliche Verwaltungsseiten</b> gehören nie ins Internet. Leite im Router nur die Ports <b>80 und 443</b> an den Proxy weiter. Im eigenen Netz solltest du sie nur von deinem Admin-Rechner aus erreichbar machen (Firewall) und, wo möglich, HTTPS nutzen (bei Portainer Port 9443).</li>
+  <li>Ändere Standard-Zugangsdaten sofort und schalte, wo es geht, die Zwei-Faktor-Anmeldung ein.</li>
+  <li>Schalte <b>UPnP</b> im Router aus, damit sich Geräte nicht selbst Ports freigeben, und prüfe die IPv6-Firewall: Portweiterleitungen gelten nur für IPv4, bei IPv6 muss die Firewall eingehende Verbindungen selbst blocken.</li>
+</ul>
+
+<h3>14.6 Einstellungen, die den Schutz erhöhen</h3>
+<table>
+  <tr><th style="width:36%">Einstellung</th><th>Warum</th></tr>
+  <tr><td><code>LOGIN_REQUIRES_ALLOWLIST=1</code></td><td>Nur Personen auf der Zugangsliste dürfen sich anmelden (siehe Kapitel 4). Ohne sie darf sich jedes Discord-Konto anmelden und ein Konto anlegen.</td></tr>
+  <tr><td><code>ONBOARDING_GUILD_IDS</code></td><td>Nur die eingetragenen Server dürfen per <code>/einrichten</code> eine Orga anlegen. Leer heißt: jeder Server, auf dem der Bot ist.</td></tr>
+  <tr><td>Bot im Portal auf <b>privat</b></td><td>Niemand sonst kann den Bot auf einen eigenen Server einladen (Kapitel 2.5).</td></tr>
+  <tr><td>Starkes <code>DB_PASSWORD</code></td><td>Die Datenbank ist nicht von außen erreichbar, ein schwaches Passwort hilft aber bei einem Fehler an anderer Stelle. Ändere es nicht einfach nachträglich in der <code>.env</code> (siehe Kapitel 15), sondern gleich bei der Installation.</td></tr>
+  <tr><td>Rechte der <code>.env</code> auf <code>600</code></td><td>Dort stehen Geheimnisse (Kapitel 4). Datenbank-Sicherungen enthalten die Discord-Zugangs-Tokens der Nutzer: nicht in offene Cloud-Ordner legen.</td></tr>
+  <tr><td>Regelmäßig aktualisieren</td><td><code>docker compose pull &amp;&amp; docker compose up -d</code> für die App, dazu die Updates des Server-Betriebssystems und des Proxys.</td></tr>
+</table>
+
+<h3>14.7 Selbsttest</h3>
+<p>Mit diesen Befehlen prüfst du von einem <b>anderen Rechner</b> aus, ob alles wirkt. <code>&lt;DOMAIN&gt;</code> ist deine Adresse.</p>
+<table>
+  <tr><th style="width:44%">Befehl</th><th>Erwartung</th></tr>
+  <tr><td><code>curl -s https://&lt;DOMAIN&gt;/healthz</code></td><td><code>ok</code></td></tr>
+  <tr><td><code>curl -m 5 http://&lt;SERVER-IP&gt;:8181/healthz</code></td><td>keine Antwort (Port zu)</td></tr>
+  <tr><td>7-MB-Anfrage (siehe 14.2)</td><td><code>413</code></td></tr>
+  <tr><td><code>curl -s -o /dev/null -w "%{http_code}\n" https://&lt;DOMAIN&gt;/catalog</code></td><td><code>303</code> (Katalog nur nach der Anmeldung)</td></tr>
+  <tr><td><code>curl -s -o /dev/null -w "%{http_code}\n" -X POST https://&lt;DOMAIN&gt;/discord/interactions</code></td><td><code>401</code> (ohne gültige Signatur von Discord)</td></tr>
+  <tr><td><code>curl -s -o /dev/null -w "%{http_code}\n" https://&lt;DOMAIN&gt;/dev/login</code></td><td><code>404</code></td></tr>
+  <tr><td><code>docker inspect community-hangar-app-1 --format 'mem={{.HostConfig.Memory}} pids={{.HostConfig.PidsLimit}}'</code></td><td><code>mem=1073741824 pids=300</code> (auf dem Server)</td></tr>
+</table>
+
+<h2><span class="no">15</span>Wenn etwas nicht klappt</h2>
 <table>
   <tr><th style="width:34%">Symptom</th><th>Ursache und Lösung</th></tr>
   <tr><td>Portal: „Private Anwendungen können keinen Standard-Autorisierungslink haben“</td><td>Unter <b>Installation</b> den <b>Installations-Link</b> auf <b>Keine</b> stellen (Kapitel 2.4), dann den Bot erneut privat speichern.</td></tr>
