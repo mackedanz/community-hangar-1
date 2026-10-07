@@ -55,3 +55,20 @@ body {
 /* <details> ohne Standard-Pfeil (Orga-Menü, einklappbare Bereiche) */
 details > summary { list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
+
+/* Einheitlicher, feststehender Hintergrund (Dunkelmodus). Als fixiertes Element statt background-attachment,
+   weil mobile Browser "fixed" oft ignorieren; der Verlauf dunkelt ab, damit Text lesbar bleibt. */
+:root:not([data-theme="light"]) body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(rgb(10 10 10 / 0.55), rgb(10 10 10 / 0.55)), url("/img/background.jpg") center / cover no-repeat;
+  pointer-events: none;
+}
+:root:not([data-theme="light"]) body {
+  background: transparent;
+}
+:root:not([data-theme="light"]) {
+  background: var(--background);
+}
