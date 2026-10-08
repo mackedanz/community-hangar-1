@@ -127,8 +127,38 @@ final class DiscordEventsTest extends DbTestCase
 
         DiscordEvents::apply($org, [$this->d('e1', ['name' => 'Raid 2'])], $now);
         $this->assertSame('Raid 2', $this->row('e1')['title']);
+        $this->assertSame('PLANNED', $this->row('e1')['status']);
     }
 
+    public function testDecisionsOfPlannersSurviveTheNextRuns(): void
+    {
+        $org = $this->org();
+        $now = new DateTimeImmutable(self::NOW);
+        DiscordEvents::apply($org, [$this->d('e1'), $this->d('e2', ['status' => 1])], $now);
+
+        // e1 veröffentlicht: bleibt es bei jedem weiteren Durchlauf
+        $id = $this->row('e1')['id'];
+        Db::run("UPDATE events SET status = 'PLANNED' WHERE id = ?", [$id]);
+        for ($i = 0; $i < 3; $i++) {
+            DiscordEvents::apply($org, [$this->d('e1'), $this->d('e2')], $now);
+        }
+        $this->assertSame('PLANNED', $this->row('e1')['status']);
+
+        // In Discord abgesagt, im Hangar wieder aktiviert: bleibt aktiv, solange Discord es weiter als abgesagt liefert
+        DiscordEvents::apply($org, [$this->d('e1', ['status' => 4]), $this->d('e2')], $now);
+        $this->assertSame('CANCELLED', $this->row('e1')['status']);
+        Db::run("UPDATE events SET status = 'PLANNED' WHERE id = ?", [$id]);
+        for ($i = 0; $i < 3; $i++) {
+            DiscordEvents::apply($org, [$this->d('e1', ['status' => 4]), $this->d('e2')], $now);
+        }
+        $this->assertSame('PLANNED', $this->row('e1')['status']);
+
+        // Wieder aktiv in Discord nach Absage: der Termin wird wieder übernommen (Entwurf je nach Einstellung)
+        DiscordEvents::apply($org, [$this->d('e1', ['status' => 4]), $this->d('e2')], $now);
+        Db::run("UPDATE events SET status = 'CANCELLED' WHERE id = ?", [$id]);
+        DiscordEvents::apply($org, [$this->d('e1'), $this->d('e2')], $now);
+        $this->assertSame('DRAFT', $this->row('e1')['status']);
+    }
     public function testCancelledOrDeletedInDiscordCancelsTheAppointment(): void
     {
         $org = $this->org('PUBLISHED');

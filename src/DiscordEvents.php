@@ -45,6 +45,8 @@ final class DiscordEvents
     }
 
     /**
+     * Der Status eines Termins ändert sich nur, wenn sich der Status des Discord-Events ändert (abgesagt, gelöscht, wieder
+     * aktiv). Was ein Planer im Hangar entschieden hat (veröffentlicht, wieder aktiviert), bleibt so erhalten.
      * @param array<string,mixed> $org
      * @param list<array{id:string,name:string,description:?string,location:?string,startsAt:DateTimeImmutable,endsAt:?DateTimeImmutable,status:int,creatorId:?string}> $list
      * @return array{created:int,updated:int,cancelled:int}
@@ -71,19 +73,25 @@ final class DiscordEvents
                     continue;   // Abgesagtes und Beendetes wird nie neu übernommen
                 }
                 Db::insert('events', [
-                    'id' => new_id(), 'org_id' => $orgId, 'status' => $newStatus, 'discord_event_id' => $d['id'],
+                    'id' => new_id(), 'org_id' => $orgId, 'status' => $newStatus, 'discord_event_id' => $d['id'], 'discord_status' => $d['status'],
                     'created_by_id' => self::creator($orgId, $d['creatorId'], (string) $org['created_by_id']),
                 ] + $fields);
                 $r['created']++;
                 continue;
             }
-            if ($d['status'] === self::CANCELED) {
-                if ($row['status'] !== 'CANCELLED') {
+
+            // Status nur bei einer Änderung in Discord anfassen (NULL = noch nie gesehen: nur merken)
+            $prev = $row['discord_status'] === null ? null : (int) $row['discord_status'];
+            if ($prev !== $d['status']) {
+                if ($prev !== null && $d['status'] === self::CANCELED && $row['status'] !== 'CANCELLED') {
                     Db::run("UPDATE events SET status = 'CANCELLED' WHERE id = ?", [$row['id']]);
                     $r['cancelled']++;
+                } elseif ($prev !== null && $live && ($prev === self::CANCELED || $prev === 0) && $row['status'] === 'CANCELLED') {
+                    Db::run('UPDATE events SET status = ? WHERE id = ?', [$newStatus, $row['id']]);
                 }
-                continue;
+                Db::run('UPDATE events SET discord_status = ? WHERE id = ?', [$d['status'], $row['id']]);
             }
+
             if (!$live || $row['discord_edited']) {
                 continue;
             }
@@ -93,29 +101,31 @@ final class DiscordEvents
                     $changed = true;
                 }
             }
-            $reopen = $row['status'] === 'CANCELLED';
-            if ($changed || $reopen) {
+            if ($changed) {
                 Db::run(
-                    'UPDATE events SET title = ?, description = ?, location = ?, starts_at = ?, ends_at = ?' . ($reopen ? ', status = ?' : '') . ' WHERE id = ?',
-                    [$fields['title'], $fields['description'], $fields['location'], $fields['starts_at'], $fields['ends_at'], ...($reopen ? [$newStatus] : []), $row['id']],
+                    'UPDATE events SET title = ?, description = ?, location = ?, starts_at = ?, ends_at = ? WHERE id = ?',
+                    [$fields['title'], $fields['description'], $fields['location'], $fields['starts_at'], $fields['ends_at'], $row['id']],
                 );
                 $r['updated']++;
             }
         }
-        // In Discord gelöscht: ein künftiger, unveränderter Termin, der nicht mehr in der Liste steht, gilt als abgesagt.
+        // In Discord gelöscht: ein künftiger Termin, der nicht mehr in der Liste steht, gilt (einmalig) als abgesagt.
         foreach (Db::all(
-            "SELECT id, discord_event_id FROM events WHERE org_id = ? AND discord_event_id IS NOT NULL AND status <> 'CANCELLED'
-                AND discord_edited = 0 AND starts_at > ?",
+            "SELECT id, discord_event_id, status, discord_status FROM events WHERE org_id = ? AND discord_event_id IS NOT NULL
+                AND (discord_status IS NULL OR discord_status <> 0) AND starts_at > ?",
             [$orgId, Time::db($now ?? Time::now())],
         ) as $e) {
-            if (!isset($seen[$e['discord_event_id']])) {
+            if (isset($seen[$e['discord_event_id']])) {
+                continue;
+            }
+            if ($e['status'] !== 'CANCELLED' && $e['discord_status'] !== null) {
                 Db::run("UPDATE events SET status = 'CANCELLED' WHERE id = ?", [$e['id']]);
                 $r['cancelled']++;
             }
+            Db::run('UPDATE events SET discord_status = 0 WHERE id = ?', [$e['id']]);
         }
         return $r;
     }
-
     private static function title(string $name): string
     {
         $t = trim(mb_substr($name, 0, 100));
