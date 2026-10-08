@@ -8,6 +8,12 @@ for v in DB_HOST DB_NAME DB_USER DB_PASSWORD AUTH_DISCORD_ID AUTH_DISCORD_SECRET
   eval "val=\${$v:-}"
   [ -n "$val" ] || missing="$missing $v"
 done
+# Schlüssel für die Verschlüsselung der Discord-Tokens in der Datenbank (nach dem Anlegen nicht mehr ändern)
+if [ -z "${APP_KEY:-}" ]; then
+  missing="$missing APP_KEY(erzeugen mit: openssl rand -base64 32, in die .env eintragen)"
+elif [ "${#APP_KEY}" -lt 32 ]; then
+  missing="$missing APP_KEY(zu kurz, mindestens 32 Zeichen)"
+fi
 if [ -z "${AUTH_URL:-}" ] && [ -z "${DOMAIN:-}" ]; then missing="$missing AUTH_URL(oder DOMAIN)"; fi
 if [ -n "$missing" ]; then
   echo "Fehlende Einstellungen:$missing" >&2
@@ -32,6 +38,8 @@ until php -r '
 done
 
 php /var/www/html/bin/migrate.php
+# Noch unverschlüsselte Discord-Tokens (Altbestand) verschlüsseln; ein Fehler stoppt den Start nicht, die Tokens bleiben lesbar.
+php /var/www/html/bin/encrypt-tokens.php || echo "Verschlüsselung der Tokens fehlgeschlagen, siehe Meldung oben." >&2
 
 # Katalog (Ship Matrix, FleetYards, Wiki) und Item-Infos regelmäßig abgleichen. Fehler stoppen die App nicht.
 (

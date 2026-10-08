@@ -10,6 +10,7 @@ use Hangar\Db;
 use Hangar\Env;
 use Hangar\Http\Request;
 use Hangar\Http\Response;
+use Hangar\Secrets;
 use Hangar\Time;
 
 /** Ende-zu-Ende durch den Router: Rechte, CSRF, 404-Verhalten, API, Anmeldung. */
@@ -373,7 +374,8 @@ final class WebTest extends DbTestCase
         $this->assertSame('OK', $user['membership_status']);
         $this->assertSame('ADMIN', Db::val('SELECT role FROM org_memberships WHERE user_id = ? AND org_id = ?', [$user['id'], $this->orgA]));
         $acc = Db::one('SELECT * FROM accounts WHERE user_id = ?', [$user['id']]);
-        $this->assertSame('neu', $acc['access_token']);
+        $this->assertSame('neu', Secrets::decrypt($acc['access_token']));
+        $this->assertStringStartsWith('enc:v1:', $acc['access_token']);
 
         $session = array_values(array_filter($r->cookies, fn ($c) => $c[0] === Auth::COOKIE))[0];
         $this->assertTrue($session[2]['httponly']);

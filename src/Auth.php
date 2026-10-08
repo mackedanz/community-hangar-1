@@ -220,8 +220,8 @@ final class Auth
                 Db::run('UPDATE users SET name = ?, image = ?, discord_id = ? WHERE id = ?', [$name, $image, $discordId, $userId]);
             }
             $data = [
-                'access_token' => $token['access_token'] ?? null,
-                'refresh_token' => $token['refresh_token'] ?? null,
+                'access_token' => Secrets::encrypt($token['access_token'] ?? null),
+                'refresh_token' => Secrets::encrypt($token['refresh_token'] ?? null),
                 'expires_at' => time() + (int) ($token['expires_in'] ?? 0),
                 'token_type' => $token['token_type'] ?? null,
                 'scope' => $token['scope'] ?? null,

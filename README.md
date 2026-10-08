@@ -29,7 +29,7 @@ Die vollständige Anleitung mit allen Discord-Einstellungen steht im PDF oben. I
 ```bash
 curl -O https://raw.githubusercontent.com/mackedanz/community-hangar-1/main/docker-compose.yml
 curl -o .env https://raw.githubusercontent.com/mackedanz/community-hangar-1/main/.env.docker.example
-nano .env                         # DOMAIN, AUTH_DISCORD_ID, AUTH_DISCORD_SECRET, DB_PASSWORD, Bot-Werte
+nano .env                         # DOMAIN, AUTH_DISCORD_ID, AUTH_DISCORD_SECRET, DB_PASSWORD, APP_KEY (openssl rand -base64 32), Bot-Werte
 docker compose up -d
 docker compose exec app php bin/register-commands.php
 ```

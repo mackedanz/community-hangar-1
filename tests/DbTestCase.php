@@ -26,6 +26,7 @@ abstract class DbTestCase extends TestCase
         $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
         Time::freeze(null);
         Env::reset();
+        Env::set('APP_KEY', 'test-schluessel-test-schluessel-1234567890');   // Verschlüsselung der Discord-Tokens
         // Jeder unerwartete HTTP-Aufruf lässt den Test scheitern
         Client::fake(static function (string $m, string $url): never {
             throw new \LogicException("Unerwarteter HTTP-Aufruf: $m $url");

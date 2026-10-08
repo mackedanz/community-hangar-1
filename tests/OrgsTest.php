@@ -9,6 +9,7 @@ use Hangar\Db;
 use Hangar\Discord;
 use Hangar\OrgError;
 use Hangar\Orgs;
+use Hangar\Secrets;
 use Hangar\Text;
 use Hangar\Time;
 
@@ -248,8 +249,9 @@ final class OrgsTest extends DbTestCase
         Orgs::syncMemberships($user['id']);
         $this->assertMatchesRegularExpression('#oauth2/token$#', $this->discord->calls[0]);
         $acc = Db::one('SELECT * FROM accounts WHERE user_id = ?', [$user['id']]);
-        $this->assertSame('neu', $acc['access_token']);
-        $this->assertSame('ref2', $acc['refresh_token']);
+        $this->assertSame('neu', Secrets::decrypt($acc['access_token']));
+        $this->assertSame('ref2', Secrets::decrypt($acc['refresh_token']));
+        $this->assertStringStartsWith('enc:v1:', $acc['access_token']);
         $this->assertGreaterThan(time(), (int) $acc['expires_at']);
     }
 

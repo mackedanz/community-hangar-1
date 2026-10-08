@@ -74,14 +74,17 @@ final class Discord
         if (!self::hasRequiredScopes($acc['scope'] ?? null)) {
             throw new DiscordAuthError('Neue Discord-Berechtigungen nötig.');
         }
+        // Die Tokens liegen verschlüsselt in der Datenbank; mit falschem APP_KEY sind sie unlesbar: dann neu anmelden.
+        $access = Secrets::decrypt($acc['access_token']);
+        $refresh = Secrets::decrypt($acc['refresh_token'] ?? null);
         $expires = (int) ($acc['expires_at'] ?? 0);
-        if ($expires > Time::now()->getTimestamp() + 60) {
-            return (string) $acc['access_token'];
+        if ($access !== null && $expires > Time::now()->getTimestamp() + 60) {
+            return $access;
         }
-        if (empty($acc['refresh_token'])) {
+        if ($refresh === null) {
             throw new DiscordAuthError('Discord-Anmeldung abgelaufen.');
         }
-        return self::refresh((string) $acc['id'], (string) $acc['refresh_token']);
+        return self::refresh((string) $acc['id'], $refresh);
     }
 
     private static function refresh(string $accountId, string $refresh): string
@@ -103,8 +106,8 @@ final class Discord
             throw new DiscordUnavailableError('Unerwartete Antwort von Discord.');
         }
         Db::run('UPDATE accounts SET access_token = ?, refresh_token = ?, expires_at = ?, scope = COALESCE(?, scope) WHERE id = ?', [
-            $body['access_token'],
-            $body['refresh_token'] ?? $refresh,
+            Secrets::encrypt((string) $body['access_token']),
+            Secrets::encrypt((string) ($body['refresh_token'] ?? $refresh)),
             Time::now()->getTimestamp() + (int) ($body['expires_in'] ?? 0),
             $body['scope'] ?? null,
             $accountId,

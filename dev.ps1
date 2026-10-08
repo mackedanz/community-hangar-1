@@ -32,6 +32,8 @@ $sql = "CREATE DATABASE IF NOT EXISTS hangar CHARACTER SET utf8mb4 COLLATE utf8m
 
 $env:DB_HOST = "127.0.0.1"; $env:DB_PORT = "$port"; $env:DB_NAME = "hangar"
 $env:DB_USER = "hangar"; $env:DB_PASSWORD = "hangar"
+# Nur für die lokale Entwicklung: Schlüssel zur Verschlüsselung der Discord-Tokens (im Betrieb kommt APP_KEY aus der .env)
+if (-not $env:APP_KEY) { $env:APP_KEY = "lokaler-entwicklungsschluessel-nur-zum-testen-123456" }
 Set-Location $root
 & $php bin/migrate.php
 Write-Host "Server: http://localhost:8080  (Strg+C beendet den PHP-Server; MariaDB mit stop.ps1)"
