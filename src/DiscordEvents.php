@@ -38,9 +38,10 @@ final class DiscordEvents
     /** @param array<string,mixed> $org Zeile aus organizations */
     public static function syncOrg(array $org): string
     {
-        $r = self::apply($org, DiscordBot::scheduledEvents((string) $org['discord_guild_id']));
+        $list = DiscordBot::scheduledEvents((string) $org['discord_guild_id']);
+        $r = self::apply($org, $list);
         Db::run('UPDATE organizations SET discord_events_synced_at = ? WHERE id = ?', [Time::nowDb(), $org['id']]);
-        return "{$r['created']} neu, {$r['updated']} geändert, {$r['cancelled']} abgesagt";
+        return 'Discord meldet ' . count($list) . (count($list) === 1 ? ' Event' : ' Events') . ": {$r['created']} neu, {$r['updated']} geändert, {$r['cancelled']} abgesagt";
     }
 
     /**
