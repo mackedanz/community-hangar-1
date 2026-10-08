@@ -26,6 +26,17 @@ final class Events
         return $m;
     }
 
+    /** Darf der Betrachter in dieser Orga planen (Admin oder Planer)? Nur sie sehen Entwürfe. */
+    private static function canPlanIn(string $orgId, ?Viewer $viewer): bool
+    {
+        foreach ($viewer?->orgs ?? [] as $o) {
+            if ($o['id'] === $orgId) {
+                return $o['role'] === 'ADMIN' || $o['canPlan'];
+            }
+        }
+        return false;
+    }
+
     private static function requirePlanner(string $userId, string $orgId): void
     {
         $m = self::requireMember($userId, $orgId);
@@ -157,19 +168,32 @@ final class Events
             }
         }
 
-        return Db::transaction(function () use ($data, $orgId, $userId, $eventId): array {
+        $draft = !empty($input['draft']);
+        return Db::transaction(function () use ($data, $orgId, $userId, $eventId, $draft): array {
             $fields = [
                 'title' => $data['title'], 'description' => $data['description'], 'location' => $data['location'],
                 'starts_at' => Time::db($data['startsAt']), 'ends_at' => $data['endsAt'] ? Time::db($data['endsAt']) : null,
             ];
             if ($eventId === null) {
                 $eventId = new_id();
-                Db::insert('events', ['id' => $eventId, 'org_id' => $orgId, 'created_by_id' => $userId] + $fields);
+                Db::insert('events', ['id' => $eventId, 'org_id' => $orgId, 'created_by_id' => $userId, 'status' => $draft ? 'DRAFT' : 'PLANNED'] + $fields);
             } else {
+                // Ein aus Discord übernommener Termin, dessen Eckdaten ein Planer ändert, wird vom Abgleich nicht mehr überschrieben.
+                $old = Db::one('SELECT title, description, location, starts_at, ends_at, discord_event_id FROM events WHERE id = ?', [$eventId]);
+                if ($old !== null && $old['discord_event_id'] !== null) {
+                    foreach (['title', 'description', 'location', 'starts_at', 'ends_at'] as $k) {
+                        if ((string) $old[$k] !== (string) $fields[$k]) {
+                            Db::run('UPDATE events SET discord_edited = 1 WHERE id = ?', [$eventId]);
+                            break;
+                        }
+                    }
+                }
                 Db::run(
                     'UPDATE events SET title = ?, description = ?, location = ?, starts_at = ?, ends_at = ? WHERE id = ?',
                     [$fields['title'], $fields['description'], $fields['location'], $fields['starts_at'], $fields['ends_at'], $eventId],
                 );
+                // Entwurf an/aus; ein abgesagtes Event bleibt abgesagt, außer es wird zum Entwurf gemacht.
+                Db::run("UPDATE events SET status = ? WHERE id = ? AND (status <> 'CANCELLED' OR ?)", [$draft ? 'DRAFT' : 'PLANNED', $eventId, $draft ? 1 : 0]);
                 Db::run('DELETE FROM event_ships WHERE event_id = ?', [$eventId]);
             }
             foreach ($data['ships'] as $i => $s) {
@@ -206,8 +230,9 @@ final class Events
     /** Zu-/Absage des angemeldeten Mitglieds; "NONE" entfernt die Antwort. */
     public static function setRsvp(string $userId, string $orgId, string $eventId, string $status): void
     {
-        self::requireMember($userId, $orgId);
-        if (Db::val('SELECT 1 FROM events WHERE id = ? AND org_id = ?', [$eventId, $orgId]) === null) {
+        $m = self::requireMember($userId, $orgId);
+        $st = Db::val('SELECT status FROM events WHERE id = ? AND org_id = ?', [$eventId, $orgId]);
+        if ($st === null || ($st === 'DRAFT' && $m['role'] !== 'ADMIN' && !$m['can_plan'])) {
             throw new EventError('Event nicht gefunden.');
         }
         if ($status === 'NONE') {
@@ -241,9 +266,9 @@ final class Events
      */
     public static function claimSlot(string $userId, string $orgId, string $eventId, ?string $slotId): void
     {
-        self::requireMember($userId, $orgId);
+        $m = self::requireMember($userId, $orgId);
         $ev = Db::one('SELECT status FROM events WHERE id = ? AND org_id = ?', [$eventId, $orgId]);
-        if ($ev === null) {
+        if ($ev === null || ($ev['status'] === 'DRAFT' && $m['role'] !== 'ADMIN' && !$m['can_plan'])) {
             throw new EventError('Event nicht gefunden.');
         }
         if ($slotId === null) {
@@ -290,11 +315,12 @@ final class Events
             "SELECT e.id, e.title, e.starts_at, e.ends_at, e.status,
                     (SELECT COUNT(*) FROM event_ships s WHERE s.event_id = e.id) AS ship_count,
                     (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'YES') AS yes_count
-               FROM events e WHERE e.org_id = ? AND e.starts_at >= ? AND e.starts_at < ? ORDER BY e.starts_at ASC",
+               FROM events e WHERE e.org_id = ? AND e.starts_at >= ? AND e.starts_at < ?" . (self::canPlanIn($orgId, $viewer) ? '' : " AND e.status <> 'DRAFT'") . " ORDER BY e.starts_at ASC",
             [$orgId, Time::db($from), Time::db($to)],
         );
         return array_map(fn ($e) => [
             'id' => $e['id'], 'title' => $e['title'], 'startsAt' => Time::parse($e['starts_at']), 'endsAt' => Time::parse($e['ends_at']),
+            'draft' => $e['status'] === 'DRAFT',
             'cancelled' => $e['status'] === 'CANCELLED', 'shipCount' => (int) $e['ship_count'], 'yes' => (int) $e['yes_count'],
         ], $rows);
     }
@@ -315,11 +341,12 @@ final class Events
                     (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'YES') AS yes_count
                FROM events e LEFT JOIN users u ON u.id = e.created_by_id
                LEFT JOIN org_memberships om ON om.user_id = e.created_by_id AND om.org_id = e.org_id
-              WHERE e.org_id = ? AND e.starts_at >= ? AND e.starts_at < ? ORDER BY e.starts_at ASC",
+              WHERE e.org_id = ? AND e.starts_at >= ? AND e.starts_at < ?" . (self::canPlanIn($orgId, $viewer) ? '' : " AND e.status <> 'DRAFT'") . " ORDER BY e.starts_at ASC",
             [$orgId, Time::db($from), Time::db($to)],
         );
         return array_map(fn ($e) => [
             'id' => $e['id'], 'title' => $e['title'], 'startsAt' => Time::parse($e['starts_at']), 'endsAt' => Time::parse($e['ends_at']),
+            'draft' => $e['status'] === 'DRAFT',
             'cancelled' => $e['status'] === 'CANCELLED', 'shipCount' => (int) $e['ship_count'], 'yes' => (int) $e['yes_count'],
             'by' => (string) ($e['creator'] ?? 'Unbekannt'),
         ], $rows);
@@ -351,7 +378,7 @@ final class Events
             return null;
         }
         $e = Db::one('SELECT * FROM events WHERE id = ? AND org_id = ?', [$eventId, $orgId]);
-        if ($e === null) {
+        if ($e === null || ($e['status'] === 'DRAFT' && !self::canPlanIn($orgId, $viewer))) {
             return null;
         }
         $shipRows = Db::all(
@@ -389,6 +416,10 @@ final class Events
             'id' => $e['id'], 'title' => $e['title'], 'description' => $e['description'], 'location' => $e['location'],
             'startsAt' => Time::parse($e['starts_at']), 'endsAt' => Time::parse($e['ends_at']),
             'cancelled' => $e['status'] === 'CANCELLED',
+            'draft' => $e['status'] === 'DRAFT',
+            'discordUrl' => $e['discord_event_id'] !== null
+                ? 'https://discord.com/events/' . rawurlencode((string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$orgId])) . '/' . rawurlencode($e['discord_event_id'])
+                : null,
             'ships' => array_map(fn ($s) => [
                 'id' => $s['id'], 'catalogItemId' => $s['catalog_item_id'], 'customName' => $s['custom_name'],
                 'name' => $s['c_name'] ?? $s['custom_name'] ?? 'Unbekanntes Schiff',

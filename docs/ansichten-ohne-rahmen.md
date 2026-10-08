@@ -14,7 +14,7 @@ Wer nicht angemeldet ist, wird wie sonst zur Anmeldung geleitet. Danach geht es 
 
 ## Hinweise
 
-- Bei der Orga Hangar fehlt zusätzlich die Leiste mit Orga-Name und Reitern (Übersicht, Mitglieder, Statistik, Planung).
+- Bei der Orga Hangar fehlt zusätzlich die Leiste mit Orga-Name und Reitern (Übersicht, Mitglieder, Statistik, Termine).
 - Die Detailseiten der Schiffe und Gegenstände sind ebenfalls ohne Rahmen erreichbar (`/pur/catalog/<art>/<name>`).
 - Andere Seiten gibt es unter `/pur` nicht.
 - Die Seiten lassen sich nicht in fremde Webseiten einbetten (iframe). Das ist eine Schutzeinstellung der App und unverändert.

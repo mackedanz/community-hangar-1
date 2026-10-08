@@ -52,6 +52,15 @@ php /var/www/html/bin/migrate.php
   done
 ) &
 
+# Discord-Server-Events als Termine übernehmen (nur Orgas mit eingeschalteter Übernahme; ohne DISCORD_BOT_TOKEN passiert nichts).
+(
+  sleep 45
+  while true; do
+    su -s /bin/sh www-data -c "php /var/www/html/bin/discord-events.php" || echo "Discord-Events-Abgleich fehlgeschlagen." >&2
+    sleep "${DISCORD_EVENTS_INTERVAL_SECONDS:-300}"
+  done
+) &
+
 # Mitgliederlisten der RSI-Orgas täglich abgleichen (nur Orgas mit hinterlegtem RSI-Kürzel).
 (
   sleep 90

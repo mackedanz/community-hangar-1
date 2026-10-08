@@ -110,6 +110,41 @@ final class DiscordBot
         return $out;
     }
 
+    /**
+     * Geplante und laufende Server-Events (Discord liefert beendete und abgesagte nur kurz). Zeiten in UTC.
+     * @return list<array{id:string,name:string,description:?string,location:?string,startsAt:\DateTimeImmutable,endsAt:?\DateTimeImmutable,status:int,creatorId:?string}>
+     */
+    public static function scheduledEvents(string $guildId): array
+    {
+        $res = self::call('GET', '/guilds/' . rawurlencode($guildId) . '/scheduled-events');
+        if ($res['status'] === 403 || $res['status'] === 401) {
+            throw new DiscordAuthError('Der Bot darf die Events dieses Servers nicht lesen.');
+        }
+        if ($res['status'] < 200 || $res['status'] >= 300) {
+            throw new DiscordUnavailableError("Discord antwortet mit Status {$res['status']}.");
+        }
+        $utc = new \DateTimeZone('UTC');
+        $out = [];
+        foreach (json_decode($res['body'], true) ?: [] as $e) {
+            if (!is_array($e) || empty($e['id']) || empty($e['scheduled_start_time'])) {
+                continue;
+            }
+            try {
+                $start = (new \DateTimeImmutable((string) $e['scheduled_start_time']))->setTimezone($utc);
+                $end = !empty($e['scheduled_end_time']) ? (new \DateTimeImmutable((string) $e['scheduled_end_time']))->setTimezone($utc) : null;
+            } catch (\Exception) {
+                continue;
+            }
+            $out[] = [
+                'id' => (string) $e['id'], 'name' => (string) ($e['name'] ?? ''), 'description' => isset($e['description']) ? (string) $e['description'] : null,
+                'location' => isset($e['entity_metadata']['location']) ? (string) $e['entity_metadata']['location'] : null,
+                'startsAt' => $start, 'endsAt' => $end, 'status' => (int) ($e['status'] ?? 1),
+                'creatorId' => isset($e['creator_id']) ? (string) $e['creator_id'] : null,
+            ];
+        }
+        return $out;
+    }
+
     /** Ändert die Antwortnachricht einer Interaktion nachträglich (nach "wird bearbeitet"). @param array<string,mixed> $data */
     public static function editOriginal(string $token, array $data): void
     {

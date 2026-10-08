@@ -11,7 +11,7 @@ $tabs = [
     'members' => ['Mitglieder', $base . '/members'],
     'hangar' => ['Orga Hangar', $base . '/hangar'],
     'stats' => ['Statistik', $base . '/stats'],
-    'events' => ['Planung', $base . '/events'],
+    'events' => ['Termine', $base . '/events'],
 ];
 if ($org['role'] === 'ADMIN') {
     $tabs['settings'] = ['Orga verwalten', $base . '/settings'];

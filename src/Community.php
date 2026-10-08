@@ -300,9 +300,10 @@ final class Community
 
     /**
      * Neueste Aktivitäten der Mitglieder dieser Orga, gefiltert nach Sichtbarkeit.
+     * $syncs: Hangar-Synchronisierungen mit aufnehmen; $joins: neue Mitglieder mit aufnehmen.
      * @return list<array{at:DateTimeImmutable,userId:string,userName:?string,text:string}>
      */
-    public static function getFeed(string $orgId, ?Viewer $viewer, int $take = 20): array
+    public static function getFeed(string $orgId, ?Viewer $viewer, int $take = 20, bool $syncs = true, bool $joins = false): array
     {
         if (!self::isMemberOf($orgId, $viewer)) {
             return [];
@@ -319,7 +320,7 @@ final class Community
               WHERE $inOrg AND $wAch ORDER BY ua.earned_at DESC LIMIT " . ($take * 10),
             [$orgId, $orgId, ...$pAch],
         );
-        $imports = Db::all(
+        $imports = !$syncs ? [] : Db::all(
             "SELECT l.created_at, l.created, u.id AS user_id, COALESCE(om.nick, u.name) AS name
                FROM import_logs l JOIN users u ON u.id = l.user_id
                LEFT JOIN org_memberships om ON om.user_id = u.id AND om.org_id = ?
@@ -333,6 +334,16 @@ final class Community
                 'at' => Time::parse($l['created_at']), 'userId' => $l['user_id'], 'userName' => $l['name'],
                 'text' => "hat den Hangar mit RSI synchronisiert ({$l['created']} Einträge)",
             ];
+        }
+        if ($joins) {
+            foreach (Db::all(
+                "SELECT u.created_at, u.id AS user_id, COALESCE(om.nick, u.name) AS name
+                   FROM users u JOIN org_memberships om ON om.user_id = u.id AND om.org_id = ?
+                  ORDER BY u.created_at DESC LIMIT $take",
+                [$orgId],
+            ) as $j) {
+                $events[] = ['at' => Time::parse($j['created_at']), 'userId' => $j['user_id'], 'userName' => $j['name'], 'text' => 'ist beigetreten'];
+            }
         }
         usort($events, fn ($a, $b) => $b['at'] <=> $a['at']);
         return array_slice($events, 0, $take);

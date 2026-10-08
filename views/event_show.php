@@ -14,9 +14,10 @@ foreach ($event['ships'] as $sh) { foreach ($sh['slots'] as $sl) { if ($sl['user
 ?>
 <div class="space-y-8">
   <div class="space-y-2">
-    <a href="<?= e($base) ?>" class="text-sm text-zinc-400 hover:underline">← Zur Planung</a>
+    <a href="<?= e($base) ?>" class="text-sm text-zinc-400 hover:underline">← Zu den Terminen</a>
     <div class="flex flex-wrap items-start justify-between gap-2">
       <h2 class="text-xl font-semibold">
+        <?php if ($event['draft']): ?><span class="mr-2 rounded bg-amber-900/50 px-2 py-0.5 text-xs text-amber-300">Entwurf</span><?php endif; ?>
         <?php if ($event['cancelled']): ?><span class="mr-2 rounded bg-red-900/50 px-2 py-0.5 text-xs text-red-300">Abgesagt</span><?php endif; ?>
         <?= e($event['title']) ?>
       </h2>
@@ -36,6 +37,7 @@ foreach ($event['ships'] as $sh) { foreach ($sh['slots'] as $sl) { if ($sl['user
       <?php endif; ?>
     </div>
     <p class="text-sm text-zinc-300"><?= e(EventTime::format($event['startsAt'])) ?><?= $event['endsAt'] ? e(' bis ' . EventTime::format($event['endsAt'])) : '' ?></p>
+    <?php if ($event['discordUrl']): ?><p class="text-sm text-zinc-400">Aus Discord übernommen · <a href="<?= e($event['discordUrl']) ?>" target="_blank" rel="noopener noreferrer" class="text-indigo-400 hover:underline">Event in Discord öffnen ↗</a></p><?php endif; ?>
     <?php if ($event['location']): ?><p class="text-sm text-zinc-400">Treffpunkt: <?= e($event['location']) ?></p><?php endif; ?>
     <?php if ($event['description']): ?><p class="max-w-3xl whitespace-pre-wrap pt-2 text-sm"><?= e($event['description']) ?></p><?php endif; ?>
   </div>

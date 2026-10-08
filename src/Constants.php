@@ -34,7 +34,7 @@ final class Constants
     public const RSI_BASE_URL = 'https://robertsspaceindustries.com';
     public const DEFAULT_SHIP_MATRIX_URL = 'https://robertsspaceindustries.com/ship-matrix/index';
 
-    public const EVENT_STATUSES = ['PLANNED', 'CANCELLED'];
+    public const EVENT_STATUSES = ['PLANNED', 'CANCELLED', 'DRAFT'];
     public const RSVP_STATUSES = ['YES', 'MAYBE', 'NO'];
 
     public static function isKind(string $kind): bool

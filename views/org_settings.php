@@ -21,7 +21,7 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2';
       <?= View::partial('partials/role_fields', ['values' => $memberRoleIds, 'name' => 'memberRoleIds', 'nameField' => 'memberRoleNames', 'labels' => $roleLabels, 'legend' => 'Rollen-IDs der Mitgliedsrollen']) ?>
       <?= View::partial('partials/role_fields', ['values' => $plannerRoleIds, 'name' => 'plannerRoleIds', 'nameField' => 'plannerRoleNames', 'labels' => $roleLabels, 'legend' => 'Rollen-IDs der Planer (dürfen Events anlegen)']) ?>
       <p class="text-xs text-zinc-500">
-        Wer eine dieser Rollen hat, darf in der Planung Events anlegen und bearbeiten. Orga-Admins
+        Wer eine dieser Rollen hat, darf bei den Terminen Events anlegen und bearbeiten. Orga-Admins
         dürfen das immer. Ohne Eintrag planen nur Admins.
       </p>
       <?= View::partial('partials/role_help') ?>
@@ -60,6 +60,33 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2';
         <?php endforeach; ?>
       </ul>
     </details>
+  </section>
+  <?php endif; ?>
+
+  <?php if (!empty($botReady)): ?>
+  <section class="space-y-3 border-t border-zinc-800 pt-6">
+    <h2 class="text-lg font-semibold">Discord-Events</h2>
+    <p class="text-sm text-zinc-400">
+      Der Bot übernimmt die Server-Events aus Discord als Termine (alle paar Minuten). Änderungen und Absagen in Discord
+      folgen automatisch, solange kein Planer Titel, Zeit, Ort oder Beschreibung im Hangar geändert hat. Schiffe, Plätze
+      und Zusagen pflegst du im Hangar. Als Entwurf übernommene Termine sehen zuerst nur Planer.
+    </p>
+    <form method="post" action="/orgs/discord-events" class="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+      <input type="hidden" name="orgId" value="<?= e($full['id']) ?>">
+      <label class="space-y-1">
+        <span class="block text-sm text-zinc-400">Übernahme</span>
+        <select name="mode" class="rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm">
+          <?php foreach (['OFF' => 'Aus', 'DRAFT' => 'Als Entwurf übernehmen', 'PUBLISHED' => 'Direkt sichtbar'] as $v => $label): ?>
+            <option value="<?= e($v) ?>"<?= ($full['discord_events_mode'] ?? 'OFF') === $v ? ' selected' : '' ?>><?= e($label) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </label>
+      <button class="rounded border border-zinc-600 px-3 py-2 text-sm hover:bg-zinc-800">Speichern und abgleichen</button>
+    </form>
+    <?php if (!empty($full['discord_events_synced_at'])): ?>
+      <p class="text-xs text-zinc-500">Letzter Abgleich: <?= e(dt(\Hangar\Time::parse($full['discord_events_synced_at']))) ?></p>
+    <?php endif; ?>
   </section>
   <?php endif; ?>
 

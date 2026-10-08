@@ -242,6 +242,28 @@ final class EventsTest extends DbTestCase
         $this->assertNull(Db::val('SELECT id FROM events WHERE id = ?', [$e['id']]));
     }
 
+    public function testDraftsAreOnlyVisibleAndEditableForPlanners(): void
+    {
+        $draft = Events::save($this->u['Admin'], $this->orgA, $this->input(['draft' => true]));
+        $this->assertSame('DRAFT', $draft['status']);
+        $planner = new \Hangar\Viewer($this->u['Planer'], 'Planer', null, null, [['id' => $this->orgA, 'slug' => 'a', 'name' => 'A', 'iconUrl' => null, 'role' => 'MEMBER', 'canPlan' => true]], 'OK', 'csrf');
+        $member = $this->viewer('Member', [$this->orgA]);
+        $from = new DateTimeImmutable('2026-07-01T00:00:00Z');
+
+        $this->assertCount(1, Events::listTimeline($this->orgA, $planner, $from, 1));
+        $this->assertTrue(Events::getEvent($this->orgA, $planner, $draft['id'])['draft']);
+        $this->assertSame([], Events::listTimeline($this->orgA, $member, $from, 1));
+        $this->assertSame([], Events::listEvents($this->orgA, $member, $from, $from->modify('+1 month')));
+        $this->assertNull(Events::getEvent($this->orgA, $member, $draft['id']));
+        $this->fails(fn () => Events::setRsvp($this->u['Member'], $this->orgA, $draft['id'], 'YES'));
+        $this->fails(fn () => Events::claimSlot($this->u['Member'], $this->orgA, $draft['id'], null));
+        $this->assertSame([], Events::listUpcoming($this->orgA, $member, new DateTimeImmutable('2026-07-01T00:00:00Z')));
+
+        // Entwurf aufheben: ab jetzt für alle sichtbar
+        Events::save($this->u['Admin'], $this->orgA, $this->input(), $draft['id']);
+        $this->assertFalse(Events::getEvent($this->orgA, $member, $draft['id'])['draft']);
+        $this->assertCount(1, Events::listTimeline($this->orgA, $member, $from, 1));
+    }
     public function testUpcomingExcludesCancelledAndPast(): void
     {
         $now = new DateTimeImmutable('2026-07-10T00:00:00Z');

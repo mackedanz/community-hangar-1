@@ -50,7 +50,13 @@ $small = 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm';
       </div>
     </section>
 
-    <button class="rounded bg-indigo-600 px-4 py-2 font-medium hover:bg-indigo-500"><?= $eventId ? 'Änderungen speichern' : 'Event anlegen' ?></button>
+    <div class="space-y-3">
+      <label class="flex max-w-2xl items-start gap-2 text-sm">
+        <input type="checkbox" name="draft" value="1" class="mt-1"<?= !empty($initial['draft']) ? ' checked' : '' ?>>
+        <span><span class="font-medium">Als Entwurf speichern</span><br><span class="text-zinc-400">Ein Entwurf ist nur für Planer und Admins sichtbar. Alle anderen Mitglieder sehen das Event erst, wenn du den Haken entfernst und speicherst.</span></span>
+      </label>
+      <button class="rounded bg-indigo-600 px-4 py-2 font-medium hover:bg-indigo-500"><?= $eventId ? 'Änderungen speichern' : 'Event anlegen' ?></button>
+    </div>
   </form>
   <script src="/js/event-form.js" defer></script>
 </div>

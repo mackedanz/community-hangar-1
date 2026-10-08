@@ -9,6 +9,8 @@ use Hangar\Community;
 use Hangar\Db;
 use Hangar\DiscordAuthError;
 use Hangar\DiscordUnavailableError;
+use Hangar\EventTime;
+use Hangar\Events;
 use Hangar\FleetFilter;
 use Hangar\Http\Flash;
 use Hangar\Http\HttpException;
@@ -32,7 +34,7 @@ final class OrgController extends Controller
     public static function orgPage(array $org, string $view, array $data, string $title, string $active): Response
     {
         $inner = View::render($view, $data + ['org' => $org], null);
-        return self::page('org_frame', ['org' => $org, 'inner' => $inner, 'active' => $active, 'wide' => $active === 'hangar'], $title . ' · ' . $org['name']);
+        return self::page('org_frame', ['org' => $org, 'inner' => $inner, 'active' => $active, 'wide' => $active === 'hangar' || $view === 'events_index'], $title . ' · ' . $org['name']);
     }
 
     private static function errorMessage(\Throwable $e): string
@@ -116,6 +118,32 @@ final class OrgController extends Controller
     }
 
     /** RSI-Kürzel der Orga speichern (leer = trennen) und die Mitgliederliste sofort abgleichen. */
+    public static function saveDiscordEvents(Request $req): Response
+    {
+        $viewer = Auth::requireViewer($req);
+        $orgId = (string) $req->input('orgId', '');
+        $slug = (string) Db::val('SELECT slug FROM organizations WHERE id = ?', [$orgId]);
+        $mode = (string) $req->input('mode', 'OFF');
+        try {
+            Orgs::requireOrgAdmin($viewer->id, $orgId);
+            if (!in_array($mode, \Hangar\DiscordEvents::MODES, true)) {
+                throw new OrgError('Ungültige Auswahl.');
+            }
+            Db::run('UPDATE organizations SET discord_events_mode = ? WHERE id = ?', [$mode, $orgId]);
+            if ($mode === 'OFF') {
+                return Flash::ok("/o/$slug/settings", 'Übernahme der Discord-Events ausgeschaltet.');
+            }
+            $limit = RateLimit::hit("discord-events:$orgId", 10, 3600);
+            if (!$limit['ok']) {
+                return Flash::ok("/o/$slug/settings", 'Gespeichert. Der Abgleich läuft gleich automatisch.');
+            }
+            $result = \Hangar\DiscordEvents::syncOrg(Orgs::find($orgId) ?? throw new OrgError('Orga nicht gefunden.'));
+        } catch (\Throwable $e) {
+            return Flash::error("/o/$slug/settings", self::errorMessage($e));
+        }
+        return Flash::ok("/o/$slug/settings", "Gespeichert und abgeglichen: $result.");
+    }
+
     public static function saveRsi(Request $req): Response
     {
         $viewer = Auth::requireViewer($req);
@@ -162,7 +190,30 @@ final class OrgController extends Controller
     public static function home(Request $req, array $p): Response
     {
         [$viewer, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
-        return self::orgPage($org, 'org_home', ['feed' => Community::getFeed($org['id'], $viewer)], 'Übersicht', 'home');
+        $utc = new \DateTimeZone('UTC');
+        $now = new \DateTimeImmutable('now', $utc);
+        $today = EventTime::dayKey($now);
+        $tomorrow = (new \DateTimeImmutable($today))->modify('+1 day')->format('Y-m-d');
+        $from = EventTime::parseBerlinLocal($today . 'T00:00') ?? $now;
+        $days = ['today' => [], 'tomorrow' => []];
+        foreach (Events::listTimeline($org['id'], $viewer, $from, 1) as $e) {
+            if ($e['cancelled'] || $e['draft']) {
+                continue;
+            }
+            $k = EventTime::dayKey($e['startsAt']);
+            if ($k === $today) {
+                $days['today'][] = $e;
+            } elseif ($k === $tomorrow) {
+                $days['tomorrow'][] = $e;
+            }
+        }
+        return self::orgPage($org, 'org_home', [
+            'feed' => Community::getFeed($org['id'], $viewer, 5, false, true),
+            'stats' => OrgStats::forOrg($org['id'], $viewer),
+            'days' => $days,
+            'next' => Events::listUpcoming($org['id'], $viewer, $now, 1)[0] ?? null,
+            'now' => $now,
+        ], 'Übersicht', 'home');
     }
 
     public static function members(Request $req, array $p): Response
