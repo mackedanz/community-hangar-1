@@ -150,7 +150,7 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2';
       <input type="hidden" name="orgId" value="<?= e($full['id']) ?>">
       <label class="space-y-1">
         <span class="block text-sm text-zinc-400">RSI-Kürzel</span>
-        <input name="rsiSid" maxlength="20" value="<?= e($full['rsi_sid'] ?? '') ?>" placeholder="EXPG" class="w-40 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 uppercase">
+        <input name="rsiSid" maxlength="20" value="<?= e($full['rsi_sid'] ?? '') ?>" class="w-40 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 uppercase">
       </label>
       <button class="rounded border border-zinc-600 px-3 py-2 text-sm hover:bg-zinc-800">Speichern und abgleichen</button>
     </form>
