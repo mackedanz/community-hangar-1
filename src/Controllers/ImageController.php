@@ -31,6 +31,26 @@ final class ImageController extends Controller
         return self::serve($req, ShipImages::ensureFallback((string) ($p['key'] ?? '')));
     }
 
+    /** GET /brand/{file}: Logo und Hintergrund der Installation (ohne Anmeldung, die Anmeldeseite zeigt sie auch). */
+    public static function brand(Request $req, array $p): Response
+    {
+        $file = (string) ($p['file'] ?? '');
+        $path = \Hangar\Branding::path($file);
+        if ($path === null) {
+            throw HttpException::notFound();
+        }
+        $etag = '"' . pathinfo($file, PATHINFO_FILENAME) . '"';   // der Dateiname enthält den Inhalts-Hash
+        $headers = [
+            'Content-Type' => str_ends_with($file, '.png') ? 'image/png' : 'image/jpeg',
+            'Cache-Control' => 'public, max-age=31536000, immutable',
+            'ETag' => $etag,
+        ];
+        if ($req->header('if-none-match') === $etag) {
+            return new Response(304, '', $headers);
+        }
+        return new Response(200, (string) file_get_contents($path), $headers);
+    }
+
     /** GET /img/armor/{slug}: Rüstungen aus dem Katalog (Quelle: Star Citizen Wiki). */
     public static function armor(Request $req, array $p): Response
     {

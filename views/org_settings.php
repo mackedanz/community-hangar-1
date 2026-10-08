@@ -91,6 +91,53 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2';
   <?php endif; ?>
 
   <section class="space-y-3 border-t border-zinc-800 pt-6">
+    <h2 class="text-lg font-semibold">Design</h2>
+    <p class="text-sm text-zinc-400">
+      Logo und Hintergrundbild der ganzen Installation (gilt für alle Orgas und die Anmeldeseite). Erlaubt sind PNG, JPG und WebP
+      bis 5 MB. Das Logo wird auf 256 Pixel, der Hintergrund auf 2000 Pixel Breite verkleinert. Auch mit dem Discord-Befehl
+      <b>/design</b> einstellbar. Die Deckkraft gibt an, wie stark das Hintergrundbild zu sehen ist (0 = unsichtbar, 100 = voll), getrennt für den dunklen und den hellen Modus.
+    </p>
+    <form method="post" action="/orgs/branding" enctype="multipart/form-data" class="space-y-4">
+      <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+      <input type="hidden" name="orgId" value="<?= e($full['id']) ?>">
+      <div class="grid gap-6 sm:grid-cols-2">
+        <?php foreach ([
+            ['logo', 'Logo', $brand['logoCustom'] ? 'eigenes' : 'Standard', $brand['logoUrl'], 'h-24 w-24'],
+            ['background', 'Hintergrund', $brand['backgroundCustom'] ? 'eigener' : 'Standard', $brand['backgroundUrl'], 'h-24 w-40 object-cover'],
+        ] as [$name, $title, $state, $src, $size]): ?>
+          <div class="space-y-2" data-pick>
+            <span class="block text-sm text-zinc-400"><?= e($title) ?> (<?= e($state) ?>)</span>
+            <input type="file" id="brand-<?= e($name) ?>" name="<?= e($name) ?>" accept="image/png,image/jpeg,image/webp" class="sr-only peer">
+            <label for="brand-<?= e($name) ?>" title="Klicken, um ein Bild auszuwählen" class="block w-fit cursor-pointer peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-500">
+              <img data-preview src="<?= e($src) ?>" alt="<?= e($title) ?>" class="<?= e($size) ?> rounded border border-zinc-800 transition hover:border-cyan-500/80">
+            </label>
+            <div class="flex flex-wrap items-center gap-3">
+              <label for="brand-<?= e($name) ?>" class="inline-block cursor-pointer rounded border border-cyan-700/70 bg-cyan-500/10 px-3 py-1.5 text-sm font-medium hover:bg-cyan-500/20">Bild auswählen …</label>
+              <span data-name class="text-xs text-zinc-500">Keine Datei gewählt</span>
+            </div>
+          </div>
+        <?php endforeach; ?>
+      </div>
+      <div class="flex flex-wrap gap-4">
+        <label class="space-y-1">
+          <span class="block text-sm text-zinc-400">Deckkraft dunkel (%)</span>
+          <input type="number" name="opacityDark" min="0" max="100" value="<?= (int) $brand['opacityDark'] ?>" class="w-28 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm">
+        </label>
+        <label class="space-y-1">
+          <span class="block text-sm text-zinc-400">Deckkraft hell (%)</span>
+          <input type="number" name="opacityLight" min="0" max="100" value="<?= (int) $brand['opacityLight'] ?>" class="w-28 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm">
+        </label>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button class="rounded bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500">Speichern</button>
+        <?php foreach (['logo' => 'Logo zurücksetzen', 'background' => 'Hintergrund zurücksetzen', 'all' => 'Alles zurücksetzen'] as $v => $label): ?>
+          <button name="reset" value="<?= e($v) ?>" formnovalidate class="rounded border border-zinc-600 px-3 py-2 text-sm hover:bg-zinc-800"><?= e($label) ?></button>
+        <?php endforeach; ?>
+      </div>
+    </form>
+  </section>
+
+  <section class="space-y-3 border-t border-zinc-800 pt-6">
     <h2 class="text-lg font-semibold">RSI-Orga</h2>
     <p class="text-sm text-zinc-400">
       Mit dem Kürzel deiner Orga auf RSI (z. B. <b>EXPG</b>, steht in der Adresse robertsspaceindustries.com/orgs/<b>EXPG</b>)
@@ -131,3 +178,16 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2';
     </form>
   </section>
 </div>
+<script>
+(function () {
+  document.querySelectorAll("[data-pick]").forEach(function (box) {
+    var input = box.querySelector("input[type=file]"), img = box.querySelector("[data-preview]"), name = box.querySelector("[data-name]");
+    input.addEventListener("change", function () {
+      var f = input.files && input.files[0];
+      if (!f) { name.textContent = "Keine Datei gewählt"; return; }
+      name.textContent = f.name + " (noch nicht gespeichert)";
+      img.src = URL.createObjectURL(f);
+    });
+  });
+})();
+</script>

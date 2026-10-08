@@ -7,6 +7,7 @@
 $wide = !empty($wide);
 $bare = !empty($bare);   // /pur/…: nur der Inhalt, ohne Logo, Navigation und Fußzeile
 $maxW = $wide ? 'max-w-[1800px]' : 'max-w-5xl';
+$brand = \Hangar\Branding::current();
 $viewer = $viewer ?? null;
 $serverAdmin = $serverAdmin ?? false;
 $csrf = $csrf ?? '';
@@ -27,18 +28,18 @@ $imprintUrl = \Hangar\Env::get('LEGAL_IMPRINT_URL');
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= e($title) ?></title>
 <meta name="description" content="Star-Citizen-Besitz tracken und mit der Community teilen">
-<link rel="icon" href="/favicon.ico">
+<link rel="icon" type="image/png" href="<?= e($brand['logoUrl']) ?>">
 <script>(function(){try{var t=localStorage.getItem("theme");if(t!=="light"&&t!=="dark"){t=window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"}document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme="dark"}})()</script>
 <link rel="stylesheet" href="/css/app.css">
+<style><?= \Hangar\Branding::css() ?></style>
 </head>
 <body class="flex h-dvh flex-col overflow-hidden bg-zinc-950 text-zinc-100">
-<?php /* Nur der Bereich über der Fußzeile scrollt; die Fußzeile bleibt immer sichtbar. */ ?>
-<div class="min-h-0 flex-1 overflow-y-auto" id="page-scroll">
-<div class="flex min-h-full flex-col">
+<?php /* Kopf (Logo, Navigation) und Fußzeile bleiben stehen, nur der Bereich dazwischen scrollt. */ ?>
 <?php if (!$bare): ?>
+<div class="relative z-20 shrink-0 bg-zinc-950/85">
 <div class="border-b border-zinc-800">
   <div class="mx-auto flex max-w-5xl justify-center px-4 py-3">
-    <a href="/" title="Community-Hangar"><img src="/logo.png" alt="Explorer Germany" width="80" height="80" class="h-20 w-20"></a>
+    <a href="/" title="Community-Hangar"><img src="<?= e($brand['logoUrl']) ?>" alt="Community-Hangar" width="80" height="80" class="h-20 w-20"></a>
   </div>
 </div>
 <header class="border-b border-zinc-800">
@@ -83,7 +84,11 @@ $imprintUrl = \Hangar\Env::get('LEGAL_IMPRINT_URL');
     <?php endif; ?>
   </nav>
 </header>
+</div>
 <?php endif; ?>
+<?php /* Nur der Bereich über der Fußzeile scrollt; die Fußzeile bleibt immer sichtbar. */ ?>
+<div class="min-h-0 flex-1 overflow-y-auto" id="page-scroll">
+<div class="flex min-h-full flex-col">
 <main class="mx-auto w-full <?= $maxW ?> flex-1 px-4 py-8">
   <?php if (!empty($flash)): ?>
     <p role="status" class="mb-6 rounded border p-3 text-sm <?= $flash['t'] === 'error' ? 'border-red-700 text-red-400' : 'border-green-700 text-green-400' ?>"><?= e($flash['m']) ?></p>

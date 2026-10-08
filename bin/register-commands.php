@@ -28,6 +28,22 @@ $status = Hangar\DiscordBot::registerCommands([
         'dm_permission' => false,
     ],
     [
+        'name' => 'design',
+        'description' => 'Aussehen der App: Logo, Hintergrundbild und Deckkraft (nur Server-Admins)',
+        'type' => 1,
+        'options' => [
+            ['type' => 11, 'name' => 'logo', 'description' => 'Neues Logo (PNG, JPG oder WebP)', 'required' => false],
+            ['type' => 11, 'name' => 'hintergrund', 'description' => 'Neues Hintergrundbild (PNG, JPG oder WebP)', 'required' => false],
+            ['type' => 4, 'name' => 'deckkraft_dunkel', 'description' => 'Deckkraft des Hintergrunds im dunklen Modus in Prozent (Standard 10)', 'required' => false, 'min_value' => 0, 'max_value' => 100],
+            ['type' => 4, 'name' => 'deckkraft_hell', 'description' => 'Deckkraft des Hintergrunds im hellen Modus in Prozent (Standard 40)', 'required' => false, 'min_value' => 0, 'max_value' => 100],
+            ['type' => 3, 'name' => 'zuruecksetzen', 'description' => 'Auf die Standardwerte zurücksetzen', 'required' => false, 'choices' => [
+                ['name' => 'Logo', 'value' => 'logo'], ['name' => 'Hintergrund', 'value' => 'background'], ['name' => 'Alles', 'value' => 'all'],
+            ]],
+        ],
+        'default_member_permissions' => '32',
+        'dm_permission' => false,
+    ],
+    [
         'name' => 'abgleichen',
         'description' => 'Mitglieder mit den Discord-Rollen abgleichen: wer darf sich im Community-Hangar anmelden',
         'type' => 1,

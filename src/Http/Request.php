@@ -24,6 +24,8 @@ final class Request
         public readonly array $cookies = [],
         public readonly string $body = '',
         public readonly string $ip = '0.0.0.0',
+        /** @var array<string,mixed> hochgeladene Dateien ($_FILES) */
+        public readonly array $files = [],
     ) {
     }
 
@@ -52,6 +54,7 @@ final class Request
             $_COOKIE,
             $body,
             (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0'),
+            $_FILES,
         );
     }
 

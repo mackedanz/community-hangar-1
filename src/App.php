@@ -47,6 +47,7 @@ final class App
         $r->get('/img/extra/{key}', [ImageController::class, 'extra']);
         $r->get('/img/armor/{slug}', [ImageController::class, 'armor']);
         $r->get('/img/info/{key}', [ImageController::class, 'info']);
+        $r->get('/brand/{file}', [ImageController::class, 'brand']);
 
         // Mein Hangar
         $r->get('/hangar', [HangarController::class, 'index']);
@@ -77,6 +78,7 @@ final class App
         $r->post('/orgs/delete', [OrgController::class, 'delete']);
         $r->post('/orgs/sync-allowlist', [OrgController::class, 'syncAllowlist']);
         $r->post('/orgs/rsi', [OrgController::class, 'saveRsi']);
+        $r->post('/orgs/branding', [OrgController::class, 'saveBranding']);
         $r->post('/orgs/discord-events', [OrgController::class, 'saveDiscordEvents']);
         $r->get('/o/{slug}', [OrgController::class, 'home']);
         $r->get('/o/{slug}/members', [OrgController::class, 'members']);

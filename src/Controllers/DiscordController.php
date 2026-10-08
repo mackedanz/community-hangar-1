@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hangar\Controllers;
 
+use Hangar\Branding;
 use Hangar\Config;
 use Hangar\Db;
 use Hangar\Discord;
@@ -64,6 +65,9 @@ final class DiscordController extends Controller
         if (!Discord::isGuildAdmin(['permissions' => $i['member']['permissions'] ?? '0'])) {
             return self::say('Das dürfen nur Server-Admins (Administrator oder „Server verwalten“).');
         }
+        if ($type === self::COMMAND && ($i['data']['name'] ?? '') === 'design') {
+            return self::designCommand($guildId, $i);
+        }
         $invokerId = (string) $user['id'];
         $invokerName = (string) (($i['member']['nick'] ?? null) ?: ($user['global_name'] ?? null) ?: ($user['username'] ?? 'Discord-Nutzer'));
 
@@ -118,6 +122,71 @@ final class DiscordController extends Controller
                 $note = "Fertig: {$r['total']} Mitglieder dürfen sich anmelden (+{$r['added']}, −{$r['removed']})" . Onboarding::deletionNote($r) . '.';
             } catch (OrgError | DiscordAuthError | DiscordUnavailableError $e) {
                 $note = 'Abgleich nicht möglich: ' . $e->getMessage();
+            }
+            DiscordBot::editOriginal($token, ['content' => $note, 'allowed_mentions' => ['parse' => []]]);
+        });
+        return $res;
+    }
+
+    /**
+     * /design: Logo, Hintergrund und Deckkraft der Installation. Nur Server-Admins (vorher geprüft) eines eingerichteten
+     * Servers. Das Laden und Umrechnen der Bilder läuft nach der Antwort, weil Discord nur 3 Sekunden Zeit lässt.
+     * @param array<string,mixed> $i
+     */
+    private static function designCommand(string $guildId, array $i): Response
+    {
+        if (Db::val('SELECT 1 FROM organizations WHERE discord_guild_id = ?', [$guildId]) === null) {
+            return self::say('Für diesen Server ist noch keine Orga eingerichtet. Das erledigt ein Server-Admin mit /einrichten.');
+        }
+        $opts = [];
+        foreach ((array) ($i['data']['options'] ?? []) as $opt) {
+            if (is_array($opt) && isset($opt['name'])) {
+                $opts[(string) $opt['name']] = $opt['value'] ?? null;
+            }
+        }
+        $url = static function (string $name) use ($opts, $i): ?string {
+            $a = $opts[$name] ?? null;
+            $att = is_string($a) ? ($i['data']['resolved']['attachments'][$a] ?? null) : null;
+            return is_array($att) && isset($att['url']) ? (string) $att['url'] : null;
+        };
+        $logo = $url('logo');
+        $background = $url('hintergrund');
+        $dark = isset($opts['deckkraft_dunkel']) ? (int) $opts['deckkraft_dunkel'] : null;
+        $light = isset($opts['deckkraft_hell']) ? (int) $opts['deckkraft_hell'] : null;
+        $reset = isset($opts['zuruecksetzen']) ? (string) $opts['zuruecksetzen'] : null;
+
+        if ($logo === null && $background === null && $dark === null && $light === null && $reset === null) {
+            $b = Branding::current();
+            return self::say(
+                'Aktuell: Logo ' . ($b['logoCustom'] ? 'eigenes' : 'Standard') . ', Hintergrund ' . ($b['backgroundCustom'] ? 'eigener' : 'Standard')
+                . ", Deckkraft dunkel {$b['opacityDark']} %, hell {$b['opacityLight']} %.\n"
+                . 'Mit /design kannst du ein Logo, ein Hintergrundbild und die Deckkraft (getrennt für dunkel und hell) setzen oder auf Standard zurücksetzen.',
+            );
+        }
+        $token = (string) ($i['token'] ?? '');
+        $res = Response::json(['type' => self::DEFERRED, 'data' => ['flags' => self::EPHEMERAL]]);
+        $res->afterSend(static function () use ($logo, $background, $dark, $light, $reset, $token): void {
+            $done = [];
+            try {
+                if ($reset !== null) {
+                    Branding::reset($reset);
+                    $done[] = 'zurückgesetzt (' . ['logo' => 'Logo', 'background' => 'Hintergrund', 'all' => 'alles'][$reset] . ')';
+                }
+                if ($logo !== null) {
+                    Branding::setImage('logo', Branding::fetch($logo));
+                    $done[] = 'Logo gesetzt';
+                }
+                if ($background !== null) {
+                    Branding::setImage('background', Branding::fetch($background));
+                    $done[] = 'Hintergrund gesetzt';
+                }
+                if ($dark !== null || $light !== null) {
+                    Branding::setOpacity($dark, $light);
+                    $done[] = 'Deckkraft ' . implode(', ', array_filter([$dark !== null ? "dunkel $dark %" : null, $light !== null ? "hell $light %" : null]));
+                }
+                $note = 'Fertig: ' . implode('; ', $done) . '. Im Browser hilft ggf. Strg+F5.';
+            } catch (OrgError $e) {
+                $note = ($done ? 'Teilweise erledigt (' . implode('; ', $done) . '). ' : '') . 'Nicht möglich: ' . $e->getMessage();
             }
             DiscordBot::editOriginal($token, ['content' => $note, 'allowed_mentions' => ['parse' => []]]);
         });

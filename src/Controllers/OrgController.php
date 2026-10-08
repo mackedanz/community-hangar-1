@@ -81,6 +81,7 @@ final class OrgController extends Controller
             'botReady' => \Hangar\DiscordBot::configured(),
             'gate' => Onboarding::gateEnabled(),
             'rsiRoster' => (int) Db::val('SELECT COUNT(*) FROM org_rsi_members WHERE org_id = ?', [$org['id']]),
+            'brand' => \Hangar\Branding::current(),
         ], 'Orga verwalten', 'settings');
     }
 
@@ -142,6 +143,38 @@ final class OrgController extends Controller
             return Flash::error("/o/$slug/settings", self::errorMessage($e));
         }
         return Flash::ok("/o/$slug/settings", "Gespeichert und abgeglichen: $result.");
+    }
+
+    /** Logo, Hintergrund und Deckkraft der Installation (nur Admins; die Orga-Admins sind die Discord-Server-Admins). */
+    public static function saveBranding(Request $req): Response
+    {
+        $viewer = Auth::requireViewer($req);
+        $orgId = (string) $req->input('orgId', '');
+        $slug = (string) Db::val('SELECT slug FROM organizations WHERE id = ?', [$orgId]);
+        $to = "/o/$slug/settings";
+        try {
+            Orgs::requireOrgAdmin($viewer->id, $orgId);
+            $reset = (string) $req->input('reset', '');
+            if ($reset !== '') {
+                \Hangar\Branding::reset($reset);
+                return Flash::ok($to, 'Zurückgesetzt.');
+            }
+            foreach (['logo', 'background'] as $kind) {
+                $f = $req->files[$kind] ?? null;
+                if (!is_array($f) || ($f['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+                    continue;
+                }
+                if ($f['error'] !== UPLOAD_ERR_OK) {
+                    throw new OrgError('Der Upload ist fehlgeschlagen (Datei zu groß?).');
+                }
+                \Hangar\Branding::setImage($kind, (string) file_get_contents((string) $f['tmp_name']));
+            }
+            $num = static fn (string $k): ?int => preg_match('/^\d{1,3}$/', trim((string) $req->input($k, ''))) === 1 ? (int) trim((string) $req->input($k)) : null;
+            \Hangar\Branding::setOpacity($num('opacityDark'), $num('opacityLight'));
+        } catch (\Throwable $e) {
+            return Flash::error($to, self::errorMessage($e));
+        }
+        return Flash::ok($to, 'Design gespeichert.');
     }
 
     public static function saveRsi(Request $req): Response

@@ -72,7 +72,7 @@ body::before {
   position: fixed;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(var(--bg-overlay), var(--bg-overlay)), url("/img/background.jpg") center / cover no-repeat;
+  background: linear-gradient(var(--bg-overlay), var(--bg-overlay)), var(--bg-image, url("/img/background.jpg")) center / cover no-repeat;
   pointer-events: none;
 }
 body {
