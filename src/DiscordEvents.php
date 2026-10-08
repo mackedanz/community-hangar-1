@@ -73,7 +73,7 @@ final class DiscordEvents
                     continue;   // Abgesagtes und Beendetes wird nie neu übernommen
                 }
                 Db::insert('events', [
-                    'id' => new_id(), 'org_id' => $orgId, 'status' => $newStatus, 'discord_event_id' => $d['id'], 'discord_status' => $d['status'],
+                    'id' => new_id(), 'org_id' => $orgId, 'status' => $newStatus, 'discord_event_id' => $d['id'], 'discord_status' => $d['status'], 'discord_origin' => 'IMPORT',
                     'created_by_id' => self::creator($orgId, $d['creatorId'], (string) $org['created_by_id']),
                 ] + $fields);
                 $r['created']++;
@@ -92,7 +92,8 @@ final class DiscordEvents
                 Db::run('UPDATE events SET discord_status = ? WHERE id = ?', [$d['status'], $row['id']]);
             }
 
-            if (!$live || $row['discord_edited']) {
+            // Vom Hangar angelegte Events: der Hangar ist maßgeblich, Discord liefert nur noch Absagen und Löschungen
+            if (!$live || $row['discord_edited'] || $row['discord_origin'] === 'PUSH') {
                 continue;
             }
             $changed = false;
@@ -126,6 +127,119 @@ final class DiscordEvents
         }
         return $r;
     }
+    // ---------------------------------------------------------------------------------------
+    // Hangar → Discord
+    // ---------------------------------------------------------------------------------------
+
+    /** @return array<string,mixed> Daten für das externe Discord-Event eines Termins */
+    public static function payload(array $e, string $orgSlug): array
+    {
+        $tail = "Details und Anmeldung: " . Config::appUrl() . '/o/' . $orgSlug . '/events/' . $e['id'];
+        $desc = trim((string) $e['description']);
+        $desc = $desc === '' ? $tail : mb_substr($desc, 0, 1000 - mb_strlen($tail) - 2) . "\n\n" . $tail;
+        $utc = new \DateTimeZone('UTC');
+        $start = (Time::parse($e['starts_at']) ?? Time::now())->setTimezone($utc);
+        // Externe Events brauchen ein Ende; ohne Angabe nehmen wir drei Stunden.
+        $end = ($e['ends_at'] !== null ? Time::parse($e['ends_at']) : null)?->setTimezone($utc) ?? $start->modify('+3 hours');
+        return [
+            'name' => mb_substr((string) $e['title'], 0, 100),
+            'description' => $desc,
+            'scheduled_start_time' => $start->format('Y-m-d\TH:i:s\Z'),
+            'scheduled_end_time' => $end->format('Y-m-d\TH:i:s\Z'),
+            'privacy_level' => 2,
+            'entity_type' => 3,
+            'entity_metadata' => ['location' => mb_substr(trim((string) $e['location']) !== '' ? trim((string) $e['location']) : 'Community-Hangar', 0, 100)],
+        ];
+    }
+
+    /** @return array<string,string> Ergebnis je Orga (Kürzel => Text) */
+    public static function pushAll(): array
+    {
+        $out = [];
+        $ids = array_unique([
+            ...array_column(Db::all('SELECT DISTINCT org_id FROM events WHERE discord_dirty = 1'), 'org_id'),
+            ...array_column(Db::all('SELECT DISTINCT org_id FROM discord_event_deletions'), 'org_id'),
+        ]);
+        foreach ($ids as $orgId) {
+            $org = Db::one('SELECT * FROM organizations WHERE id = ?', [$orgId]);
+            if ($org !== null) {
+                $out[$org['slug']] = self::pushOrg($org);
+            }
+        }
+        return $out;
+    }
+
+    /** Schreibt vorgemerkte Änderungen der Termine einer Orga nach Discord. Fehler bleiben vermerkt und werden beim nächsten Lauf wiederholt. @param array<string,mixed> $org */
+    public static function pushOrg(array $org, ?DateTimeImmutable $now = null): string
+    {
+        $guild = (string) $org['discord_guild_id'];
+        $done = 0;
+        $failed = 0;
+        foreach (Db::all('SELECT * FROM discord_event_deletions WHERE org_id = ?', [$org['id']]) as $d) {
+            try {
+                DiscordBot::deleteScheduledEvent($guild, $d['discord_event_id']);
+                Db::run('DELETE FROM discord_event_deletions WHERE id = ?', [$d['id']]);
+                $done++;
+            } catch (DiscordAuthError | DiscordUnavailableError) {
+                $failed++;
+            }
+        }
+        foreach (Db::all("SELECT * FROM events WHERE org_id = ? AND discord_dirty = 1 AND (discord_origin IS NULL OR discord_origin = 'PUSH')", [$org['id']]) as $e) {
+            try {
+                self::pushOne($org, $e, $now ?? Time::now());
+                $done++;
+            } catch (DiscordAuthError | DiscordUnavailableError $x) {
+                Db::run('UPDATE events SET discord_error = ? WHERE id = ?', [mb_substr($x->getMessage(), 0, 190), $e['id']]);
+                $failed++;
+            }
+        }
+        return "$done geschrieben, $failed fehlgeschlagen";
+    }
+
+    /** @param array<string,mixed> $org @param array<string,mixed> $e */
+    private static function pushOne(array $org, array $e, DateTimeImmutable $now): void
+    {
+        $guild = (string) $org['discord_guild_id'];
+        $id = $e['discord_event_id'];
+        $clean = static fn (array $set = []) => Db::run(
+            'UPDATE events SET discord_dirty = 0, discord_error = NULL' . implode('', array_map(static fn ($k) => ", $k = ?", array_keys($set))) . ' WHERE id = ?',
+            [...array_values($set), $e['id']],
+        );
+
+        // Entwurf oder Haken entfernt: das Discord-Event verschwindet wieder
+        if (!$e['discord_push'] || $e['status'] === 'DRAFT') {
+            if ($id !== null) {
+                DiscordBot::deleteScheduledEvent($guild, (string) $id);
+                $clean(['discord_event_id' => null, 'discord_origin' => null, 'discord_status' => null]);
+            } else {
+                $clean();
+            }
+            return;
+        }
+        if ($e['status'] === 'CANCELLED') {
+            if ($id !== null && (int) $e['discord_status'] !== 4) {
+                DiscordBot::updateScheduledEvent($guild, (string) $id, ['status' => 4]);
+                $clean(['discord_status' => 4]);
+            } else {
+                $clean();
+            }
+            return;
+        }
+        // Vergangene Termine werden nicht mehr angelegt oder geändert
+        if ((Time::parse($e['starts_at']) ?? $now) <= $now) {
+            $clean();
+            return;
+        }
+        $payload = self::payload($e, (string) $org['slug']);
+        // Ein in Discord abgesagtes Event lässt sich nicht wieder aktivieren: dann entsteht ein neues.
+        if ($id !== null && (int) $e['discord_status'] !== 4 && DiscordBot::updateScheduledEvent($guild, (string) $id, $payload)) {
+            $clean();
+            return;
+        }
+        $new = DiscordBot::createScheduledEvent($guild, $payload);
+        $clean(['discord_event_id' => $new, 'discord_origin' => 'PUSH', 'discord_status' => 1]);
+    }
+
     private static function title(string $name): string
     {
         $t = trim(mb_substr($name, 0, 100));

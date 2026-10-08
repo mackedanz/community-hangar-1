@@ -145,6 +145,49 @@ final class DiscordBot
         return $out;
     }
 
+    /** @param array{status:int,body:string,headers:array<string,string>} $res */
+    private static function checkEventWrite(array $res): void
+    {
+        if ($res['status'] === 401 || $res['status'] === 403) {
+            throw new DiscordAuthError('Dem Bot fehlt die Berechtigung „Events erstellen“.');
+        }
+        if ($res['status'] < 200 || $res['status'] >= 300) {
+            throw new DiscordUnavailableError("Discord antwortet mit Status {$res['status']}: " . mb_substr(preg_replace('/\s+/', ' ', $res['body']) ?? '', 0, 120));
+        }
+    }
+
+    /** Legt ein externes Server-Event an und liefert dessen ID. @param array<string,mixed> $payload */
+    public static function createScheduledEvent(string $guildId, array $payload): string
+    {
+        $res = self::call('POST', '/guilds/' . rawurlencode($guildId) . '/scheduled-events', $payload);
+        self::checkEventWrite($res);
+        $e = json_decode($res['body'], true);
+        if (!is_array($e) || empty($e['id'])) {
+            throw new DiscordUnavailableError('Discord hat keine Event-ID geliefert.');
+        }
+        return (string) $e['id'];
+    }
+
+    /** Ändert ein Server-Event. false, wenn es in Discord nicht mehr existiert. @param array<string,mixed> $payload */
+    public static function updateScheduledEvent(string $guildId, string $eventId, array $payload): bool
+    {
+        $res = self::call('PATCH', '/guilds/' . rawurlencode($guildId) . '/scheduled-events/' . rawurlencode($eventId), $payload);
+        if ($res['status'] === 404) {
+            return false;
+        }
+        self::checkEventWrite($res);
+        return true;
+    }
+
+    /** Löscht ein Server-Event (ein bereits fehlendes gilt als gelöscht). */
+    public static function deleteScheduledEvent(string $guildId, string $eventId): void
+    {
+        $res = self::call('DELETE', '/guilds/' . rawurlencode($guildId) . '/scheduled-events/' . rawurlencode($eventId));
+        if ($res['status'] !== 404) {
+            self::checkEventWrite($res);
+        }
+    }
+
     /** Ändert die Antwortnachricht einer Interaktion nachträglich (nach "wird bearbeitet"). @param array<string,mixed> $data */
     public static function editOriginal(string $token, array $data): void
     {

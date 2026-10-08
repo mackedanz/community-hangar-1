@@ -14,3 +14,7 @@ if (Hangar\Env::get('DISCORD_BOT_TOKEN') === null) {
 foreach (Hangar\DiscordEvents::syncAll() as $slug => $result) {
     echo "$slug: $result\n";
 }
+// Danach vorgemerkte Hangar-Termine nach Discord schreiben
+foreach (Hangar\DiscordEvents::pushAll() as $slug => $result) {
+    echo "$slug (nach Discord): $result\n";
+}

@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Hangar\Db;
 use Hangar\DiscordEvents;
 use Hangar\Events;
+use Hangar\Http\Client;
 
 final class DiscordEventsTest extends DbTestCase
 {
@@ -206,5 +207,175 @@ final class DiscordEventsTest extends DbTestCase
         $this->assertSame('Discord-Event', $row['title']);
         $this->assertSame(3000, mb_strlen($row['description']));
         $this->assertSame(100, mb_strlen($row['location']));
+    }
+
+    // --- Hangar → Discord ----------------------------------------------------------------
+
+    /** @var list<array{0:string,1:string,2:?array}> */
+    private array $calls = [];
+
+    /** Discord-Nachbau: merkt sich die Aufrufe; $status/$body für POST und PATCH einstellbar. */
+    private function fakeDiscord(int $status = 200, string $body = '{"id":"555"}'): void
+    {
+        $this->calls = [];
+        Client::fake(function (string $m, string $url, array $h, ?string $payload) use ($status, $body): array {
+            $this->calls[] = [$m, substr($url, strpos($url, '/guilds')), $payload !== null ? json_decode($payload, true) : null];
+            return ['status' => $m === 'DELETE' ? ($status === 200 ? 204 : $status) : $status, 'body' => $m === 'POST' ? $body : '{}', 'headers' => []];
+        });
+    }
+
+    private function save(array $extra = [], ?string $id = null): array
+    {
+        return Events::save($this->adminId, $this->orgId, $extra + [
+            'title' => 'Mining-Abend', 'startsAt' => '2026-10-20T20:00', 'endsAt' => null,
+            'description' => 'Erz abbauen', 'location' => 'Port Olisar', 'ships' => [], 'discord' => true,
+        ], $id);
+    }
+
+    private function push(): string
+    {
+        return DiscordEvents::pushOrg($this->org(), new DateTimeImmutable(self::NOW));
+    }
+
+    public function testPublishedEventWithTickIsCreatedAsExternalDiscordEvent(): void
+    {
+        $this->fakeDiscord();
+        $e = $this->save();
+        $this->assertSame(1, (int) Db::val('SELECT discord_dirty FROM events WHERE id = ?', [$e['id']]));
+        $this->push();
+
+        $this->assertCount(1, $this->calls);
+        [$m, $url, $p] = $this->calls[0];
+        $this->assertSame('POST', $m);
+        $this->assertSame('/guilds/de-guild/scheduled-events', $url);
+        $this->assertSame(3, $p['entity_type']);
+        $this->assertSame('Port Olisar', $p['entity_metadata']['location']);
+        $this->assertSame('2026-10-20T18:00:00Z', $p['scheduled_start_time']);
+        $this->assertSame('2026-10-20T21:00:00Z', $p['scheduled_end_time']);   // ohne Ende: drei Stunden
+        $this->assertStringContainsString('/o/de-org/events/' . $e['id'], $p['description']);
+        $row = Db::one('SELECT * FROM events WHERE id = ?', [$e['id']]);
+        $this->assertSame('555', $row['discord_event_id']);
+        $this->assertSame('PUSH', $row['discord_origin']);
+        $this->assertSame(0, (int) $row['discord_dirty']);
+
+        // nichts mehr zu tun
+        $this->fakeDiscord();
+        $this->push();
+        $this->assertSame([], $this->calls);
+    }
+
+    public function testEventWithoutTickAndDraftsAreNotSentButPublishingSendsThem(): void
+    {
+        $this->fakeDiscord();
+        $this->save(['discord' => false]);
+        $draft = $this->save(['draft' => true, 'title' => 'Entwurf']);
+        $this->push();
+        $this->assertSame([], $this->calls);
+
+        $this->save(['title' => 'Entwurf'], $draft['id']);   // veröffentlicht, Haken bleibt
+        $this->push();
+        $this->assertSame('POST', $this->calls[0][0]);
+    }
+
+    public function testChangesCancellationAndDeletionAreWrittenToDiscord(): void
+    {
+        $this->fakeDiscord();
+        $e = $this->save();
+        $this->push();
+
+        $this->fakeDiscord();
+        $this->save(['title' => 'Neuer Titel'], $e['id']);
+        $this->push();
+        $this->assertSame('PATCH', $this->calls[0][0]);
+        $this->assertSame('/guilds/de-guild/scheduled-events/555', $this->calls[0][1]);
+        $this->assertSame('Neuer Titel', $this->calls[0][2]['name']);
+
+        $this->fakeDiscord();
+        Events::setCancelled($this->adminId, $this->orgId, $e['id'], true);
+        $this->push();
+        $this->assertSame(['status' => 4], $this->calls[0][2]);
+
+        // Wieder aktiviert: ein abgesagtes Discord-Event lässt sich nicht reaktivieren, es entsteht ein neues
+        $this->fakeDiscord(200, '{"id":"777"}');
+        Events::setCancelled($this->adminId, $this->orgId, $e['id'], false);
+        $this->push();
+        $this->assertSame('POST', $this->calls[0][0]);
+        $this->assertSame('777', Db::val('SELECT discord_event_id FROM events WHERE id = ?', [$e['id']]));
+
+        $this->fakeDiscord();
+        Events::delete($this->adminId, $this->orgId, $e['id']);
+        $this->push();
+        $this->assertSame(['DELETE', '/guilds/de-guild/scheduled-events/777', null], $this->calls[0]);
+        $this->assertSame(0, (int) Db::val('SELECT COUNT(*) FROM discord_event_deletions'));
+    }
+
+    public function testRemovingTheTickOrMakingADraftDeletesTheDiscordEvent(): void
+    {
+        $this->fakeDiscord();
+        $e = $this->save();
+        $this->push();
+
+        $this->fakeDiscord();
+        $this->save(['discord' => false], $e['id']);
+        $this->push();
+        $this->assertSame('DELETE', $this->calls[0][0]);
+        $row = Db::one('SELECT * FROM events WHERE id = ?', [$e['id']]);
+        $this->assertNull($row['discord_event_id']);
+        $this->assertSame(0, (int) $row['discord_push']);
+    }
+
+    public function testFailuresAreRememberedAndRetried(): void
+    {
+        $this->fakeDiscord(403);
+        $e = $this->save();
+        $this->assertStringContainsString('1 fehlgeschlagen', $this->push());
+        $row = Db::one('SELECT * FROM events WHERE id = ?', [$e['id']]);
+        $this->assertSame(1, (int) $row['discord_dirty']);
+        $this->assertStringContainsString('Events erstellen', $row['discord_error']);
+
+        $this->fakeDiscord();
+        $this->push();
+        $row = Db::one('SELECT * FROM events WHERE id = ?', [$e['id']]);
+        $this->assertSame(0, (int) $row['discord_dirty']);
+        $this->assertNull($row['discord_error']);
+        $this->assertSame('555', $row['discord_event_id']);
+    }
+
+    public function testPastEventsAreNotSent(): void
+    {
+        $this->fakeDiscord();
+        $this->save(['startsAt' => '2026-09-01T20:00']);
+        $this->push();
+        $this->assertSame([], $this->calls);
+        $this->assertSame(0, (int) Db::val('SELECT COUNT(*) FROM events WHERE discord_dirty = 1'));
+    }
+
+    public function testImportNeitherDuplicatesNorOverwritesEventsCreatedByTheHangar(): void
+    {
+        $this->fakeDiscord();
+        $e = $this->save();
+        $this->push();
+
+        $org = $this->org();
+        $now = new DateTimeImmutable(self::NOW);
+        $r = DiscordEvents::apply($org, [$this->d('555', ['name' => 'In Discord umbenannt'])], $now);
+        $this->assertSame(['created' => 0, 'updated' => 0, 'cancelled' => 0], $r);
+        $this->assertSame('Mining-Abend', Db::val('SELECT title FROM events WHERE id = ?', [$e['id']]));
+        $this->assertSame(1, (int) Db::val('SELECT COUNT(*) FROM events WHERE org_id = ?', [$this->orgId]));
+
+        // In Discord abgesagt: das wird übernommen
+        $r = DiscordEvents::apply($org, [$this->d('555', ['status' => 4])], $now);
+        $this->assertSame(1, $r['cancelled']);
+    }
+
+    public function testImportedEventsIgnoreTheTick(): void
+    {
+        $this->fakeDiscord();
+        DiscordEvents::apply($this->org(), [$this->d('e1')], new DateTimeImmutable(self::NOW));
+        $row = $this->row('e1');
+        $this->save(['title' => 'Raid', 'discord' => true], $row['id']);
+        $this->assertSame(0, (int) $this->row('e1')['discord_push']);
+        $this->push();
+        $this->assertSame([], $this->calls);
     }
 }

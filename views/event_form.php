@@ -55,6 +55,12 @@ $small = 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm';
         <input type="checkbox" name="draft" value="1" class="mt-1"<?= !empty($initial['draft']) ? ' checked' : '' ?>>
         <span><span class="font-medium">Als Entwurf speichern</span><br><span class="text-zinc-400">Ein Entwurf ist nur für Planer und Admins sichtbar. Alle anderen Mitglieder sehen das Event erst, wenn du den Haken entfernst und speicherst.</span></span>
       </label>
+      <?php if (!empty($discordBot) && empty($initial['discordImported'])): ?>
+        <label class="flex max-w-2xl items-start gap-2 text-sm">
+          <input type="checkbox" name="discord" value="1" class="mt-1"<?= !empty($initial['discord']) ? ' checked' : '' ?>>
+          <span><span class="font-medium">Auch als Discord-Event anlegen</span><br><span class="text-zinc-400">Der Bot legt das Event innerhalb weniger Minuten auf dem Discord-Server an (als externes Event mit dem Treffpunkt als Ort) und hält es aktuell, auch bei Absage und Löschen. Entwürfe erscheinen erst nach dem Veröffentlichen.</span></span>
+        </label>
+      <?php endif; ?>
       <button class="rounded bg-indigo-600 px-4 py-2 font-medium hover:bg-indigo-500"><?= $eventId ? 'Änderungen speichern' : 'Event anlegen' ?></button>
     </div>
   </form>

@@ -169,17 +169,20 @@ final class Events
         }
 
         $draft = !empty($input['draft']);
-        return Db::transaction(function () use ($data, $orgId, $userId, $eventId, $draft): array {
+        $wantPush = !empty($input['discord']);
+        return Db::transaction(function () use ($data, $orgId, $userId, $eventId, $draft, $wantPush): array {
             $fields = [
                 'title' => $data['title'], 'description' => $data['description'], 'location' => $data['location'],
                 'starts_at' => Time::db($data['startsAt']), 'ends_at' => $data['endsAt'] ? Time::db($data['endsAt']) : null,
             ];
+            $wasPushed = false;
             if ($eventId === null) {
                 $eventId = new_id();
                 Db::insert('events', ['id' => $eventId, 'org_id' => $orgId, 'created_by_id' => $userId, 'status' => $draft ? 'DRAFT' : 'PLANNED'] + $fields);
             } else {
                 // Ein aus Discord übernommener Termin, dessen Eckdaten ein Planer ändert, wird vom Abgleich nicht mehr überschrieben.
-                $old = Db::one('SELECT title, description, location, starts_at, ends_at, discord_event_id FROM events WHERE id = ?', [$eventId]);
+                $old = Db::one('SELECT title, description, location, starts_at, ends_at, discord_event_id, discord_push FROM events WHERE id = ?', [$eventId]);
+                $wasPushed = $old !== null && ($old['discord_push'] || $old['discord_event_id'] !== null);
                 if ($old !== null && $old['discord_event_id'] !== null) {
                     foreach (['title', 'description', 'location', 'starts_at', 'ends_at'] as $k) {
                         if ((string) $old[$k] !== (string) $fields[$k]) {
@@ -195,6 +198,10 @@ final class Events
                 // Entwurf an/aus; ein abgesagtes Event bleibt abgesagt, außer es wird zum Entwurf gemacht.
                 Db::run("UPDATE events SET status = ? WHERE id = ? AND (status <> 'CANCELLED' OR ?)", [$draft ? 'DRAFT' : 'PLANNED', $eventId, $draft ? 1 : 0]);
                 Db::run('DELETE FROM event_ships WHERE event_id = ?', [$eventId]);
+            }
+            // Haken „Auch in Discord anlegen“: der Cron-Lauf schreibt es nach Discord (aus Discord übernommene Termine ausgenommen)
+            if ($wantPush || $wasPushed) {
+                Db::run("UPDATE events SET discord_push = ?, discord_dirty = 1 WHERE id = ? AND (discord_origin IS NULL OR discord_origin = 'PUSH')", [$wantPush ? 1 : 0, $eventId]);
             }
             foreach ($data['ships'] as $i => $s) {
                 $shipId = new_id();
@@ -217,11 +224,17 @@ final class Events
             throw new EventError('Event nicht gefunden.');
         }
         Db::run('UPDATE events SET status = ? WHERE id = ? AND org_id = ?', [$cancelled ? 'CANCELLED' : 'PLANNED', $eventId, $orgId]);
+        Db::run('UPDATE events SET discord_dirty = 1 WHERE id = ? AND discord_push = 1', [$eventId]);
     }
 
     public static function delete(string $userId, string $orgId, string $eventId): void
     {
         self::requirePlanner($userId, $orgId);
+        // Ein vom Hangar angelegtes Discord-Event wird vom Cron-Lauf entfernt
+        $d = Db::one("SELECT discord_event_id FROM events WHERE id = ? AND org_id = ? AND discord_origin = 'PUSH'", [$eventId, $orgId]);
+        if ($d !== null && $d['discord_event_id'] !== null) {
+            Db::insert('discord_event_deletions', ['id' => new_id(), 'org_id' => $orgId, 'discord_event_id' => $d['discord_event_id']]);
+        }
         if (Db::exec('DELETE FROM events WHERE id = ? AND org_id = ?', [$eventId, $orgId]) === 0) {
             throw new EventError('Event nicht gefunden.');
         }
@@ -417,6 +430,9 @@ final class Events
             'startsAt' => Time::parse($e['starts_at']), 'endsAt' => Time::parse($e['ends_at']),
             'cancelled' => $e['status'] === 'CANCELLED',
             'draft' => $e['status'] === 'DRAFT',
+            'discordPush' => (bool) $e['discord_push'],
+            'discordOrigin' => $e['discord_origin'],
+            'discordError' => $e['discord_error'],
             'discordUrl' => $e['discord_event_id'] !== null
                 ? 'https://discord.com/events/' . rawurlencode((string) Db::val('SELECT discord_guild_id FROM organizations WHERE id = ?', [$orgId])) . '/' . rawurlencode($e['discord_event_id'])
                 : null,
