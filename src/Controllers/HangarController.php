@@ -35,6 +35,7 @@ final class HangarController extends Controller
             'q' => $q, 'filter' => $filter, 'options' => $options, 'filtering' => $q !== '' || $specFilter !== [],
             'groups' => Hangar::groupByKind($shown),
             'lastSync' => Community::getLastSync($viewer->id),
+            'profile' => Community::getProfile($viewer->id, $viewer),
             'term' => $term,
             'results' => $term !== '' ? Hangar::searchCatalog($term) : [],
             'wide' => true,
