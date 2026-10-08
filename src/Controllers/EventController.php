@@ -66,6 +66,12 @@ final class EventController extends Controller
     {
         [$viewer, $org] = Auth::requireOrgMember($req, (string) $p['slug']);
         $event = Events::getEvent($org['id'], $viewer, (string) $p['id']) ?? throw HttpException::notFound();
+        // Vergangene und abgesagte Termine öffnen nur Planer (wie in der Zeitleiste gesperrt).
+        $now = new DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        $over = ($event['endsAt'] ?? $event['startsAt']) < $now;
+        if (($over || $event['cancelled']) && !$org['canPlan']) {
+            throw HttpException::notFound();
+        }
         return OrgController::orgPage($org, 'event_show', [
             'event' => $event,
             'chunks' => EventBriefing::format(Events::toBriefing($event)),

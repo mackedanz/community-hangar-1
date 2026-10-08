@@ -40,7 +40,7 @@ foreach ($timeline as $col) {
                 $running = !$ev['cancelled'] && $ev['endsAt'] && $ev['startsAt'] <= $nowUtc && $ev['endsAt'] >= $nowUtc;   // läuft gerade
                 $past = $ev['startsAt'] < $nowUtc && (!$ev['endsAt'] || $ev['endsAt'] < $nowUtc);
                 $draft = !empty($ev['draft']);   // Entwurf: nur Planer bekommen ihn überhaupt in der Liste
-                $locked = $past && !$org['canPlan'];   // Vergangenes öffnen nur Planer
+                $locked = ($past || $ev['cancelled']) && !$org['canPlan'];   // Vergangenes und Abgesagtes öffnen nur Planer
                 $tag = $locked ? 'div' : 'a';
                 $dayNo = substr(EventTime::dayKey($ev['startsAt']), 8, 2);
                 $wd = $wdFmt->format($ev['startsAt']); ?>
@@ -96,7 +96,7 @@ foreach ($timeline as $col) {
     o.observe(t);
   }
 
-  // Beim nächsten Start oder Ende eines Termins die Leiste neu laden (Farben, Rahmen, Sperre), ohne die Seite zu springen.
+  // Die Leiste regelmäßig und beim nächsten Start oder Ende eines Termins neu laden (Farben, Rahmen, Sperre), ohne die Seite zu springen.
   var timer;
   function schedule() {
     clearTimeout(timer);
@@ -107,7 +107,8 @@ foreach ($timeline as $col) {
         if (v > now && v < next) next = v;
       });
     });
-    timer = setTimeout(refresh, Math.min((next - now) * 1000 + 1000, 600000));
+    // Spätestens jede Minute neu laden, damit neue (z. B. aus Discord übernommene) Termine ohne F5 erscheinen; im Hintergrund-Tab ruht es.
+    timer = setTimeout(function () { document.hidden ? schedule() : refresh(); }, Math.min((next - now) * 1000 + 1000, 60000));
   }
   function refresh() {
     fetch(location.href, { credentials: "same-origin" })
