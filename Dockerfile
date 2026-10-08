@@ -19,6 +19,8 @@ RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoload
 
 # --- 3. Laufzeit ----------------------------------------------------------------------------
 FROM php:8.3-apache
+LABEL org.opencontainers.image.licenses="LicenseRef-Proprietary" \
+      org.opencontainers.image.description="Community-Hangar (Self-Hosted); Nutzungsbedingungen siehe LIZENZ.md"
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libicu-dev \
  && docker-php-ext-install -j"$(nproc)" intl pdo_mysql opcache \
@@ -35,6 +37,7 @@ COPY views ./views
 COPY migrations ./migrations
 COPY bin ./bin
 COPY bookmarklet ./bookmarklet
+COPY LIZENZ.md LICENSE.txt ./
 COPY public ./public
 COPY --from=css /app/public/css ./public/css
 COPY docker/entrypoint.sh /usr/local/bin/hangar-entrypoint

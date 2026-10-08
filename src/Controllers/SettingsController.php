@@ -94,6 +94,14 @@ final class SettingsController extends Controller
         return self::page('profile', ['profile' => $profile, 'wide' => true], (string) ($profile['user']['name'] ?? 'Profil'));
     }
 
+    /** GET /lizenz: Nutzungsbedingungen und Lizenzvereinbarung (Text aus LIZENZ.md, ohne Anmeldung lesbar). */
+    public static function license(Request $req): Response
+    {
+        $file = dirname(__DIR__, 2) . '/LIZENZ.md';
+        $md = is_file($file) ? (string) file_get_contents($file) : "# Lizenz\n\nDie Lizenzdatei fehlt in dieser Installation.";
+        return self::page('license', ['html' => \Hangar\SimpleMarkdown::render($md)], 'Lizenz');
+    }
+
     public static function privacy(Request $req): Response
     {
         return self::page('privacy', [], 'Datenschutz');

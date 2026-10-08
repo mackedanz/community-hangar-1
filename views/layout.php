@@ -105,6 +105,7 @@ $imprintUrl = \Hangar\Env::get('LEGAL_IMPRINT_URL');
   <?php else: ?>
     <a href="/datenschutz" class="hover:text-zinc-300">Datenschutz</a>
   <?php endif; ?>
+  · <a href="/lizenz" class="hover:text-zinc-300">Lizenz</a>
   <?php if ($imprintUrl): ?>
     · <a href="<?= e($imprintUrl) ?>" target="_blank" rel="noopener noreferrer" class="hover:text-zinc-300">Impressum</a>
   <?php endif; ?>

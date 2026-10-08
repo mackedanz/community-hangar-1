@@ -39,6 +39,7 @@ final class App
         $r->get('/healthz', fn () => Response::text("ok
 "));
         $r->get('/datenschutz', [SettingsController::class, 'privacy']);
+        $r->get('/lizenz', [SettingsController::class, 'license']);
 
         // Katalog und Bilder
         $r->get('/catalog', [CatalogController::class, 'index']);

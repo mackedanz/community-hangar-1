@@ -92,6 +92,12 @@ braucht keine Rechte auf dem Server (`permissions=0`).
 Lokal lässt sich der Endpunkt nur mit einem Tunnel von Discord aus erreichen; die Logik ist mit gefälschten Interaktionen
 getestet (`tests/OnboardingTest.php`).
 
+## Lizenz
+
+Community-Hangar ist urheberrechtlich geschützt und wird nur an freigeschaltete Betreiber weitergegeben. Die
+Nutzungsbedingungen stehen in [LIZENZ.md](LIZENZ.md) (in der App unter `/lizenz`), eine kurze englische Fassung in
+[LICENSE.txt](LICENSE.txt). Die Kontaktangabe ist dort noch ein Platzhalter.
+
 ## Datenschutz und Sicherheit
 
 Gespeichert werden die Discord-ID, der Anzeigename, der Avatar und der Nickname auf dem Server der Orga, der RSI-Handle
