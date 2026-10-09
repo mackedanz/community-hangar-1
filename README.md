@@ -35,7 +35,7 @@ docker compose exec app php bin/register-commands.php
 ```
 
 Davor muss ein Reverse-Proxy HTTPS übernehmen (Port 8181, `HANGAR_PORT`). Der Container wartet auf die Datenbank,
-spielt die Migrationen ein und gleicht den Katalog wöchentlich ab (`CATALOG_SYNC_INTERVAL_SECONDS`). Schiffsbilder werden beim
+spielt die Migrationen ein und gleicht den Katalog alle 2 Stunden ab (`CATALOG_SYNC_INTERVAL_SECONDS`; findet ein RSI-Import Schiffe, die der Katalog noch nicht kennt, werden die Schiffe sofort aktualisiert). Schiffsbilder werden beim
 ersten Aufruf eines Schiffs von RSI geladen (erstes Bild der Store-Seite) und im Volume `ship-images` abgelegt (`/img/ship/{slug}`).
 
 | Aufgabe | Befehl |

@@ -47,7 +47,7 @@ php /var/www/html/bin/encrypt-tokens.php || echo "Verschlüsselung der Tokens fe
   while true; do
     su -s /bin/sh www-data -c "php /var/www/html/bin/catalog-sync.php" || echo "Katalog-Abgleich fehlgeschlagen, nächster Versuch beim nächsten Lauf." >&2
     su -s /bin/sh www-data -c "php /var/www/html/bin/enrich-items.php" || true
-    sleep "${CATALOG_SYNC_INTERVAL_SECONDS:-604800}"
+    sleep "${CATALOG_SYNC_INTERVAL_SECONDS:-7200}"
   done
 ) &
 

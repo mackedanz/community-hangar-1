@@ -50,8 +50,8 @@ services:
       # Links zu Impressum/Datenschutz des Betreibers (optional)
       LEGAL_IMPRINT_URL: ${LEGAL_IMPRINT_URL:-}
       LEGAL_PRIVACY_URL: ${LEGAL_PRIVACY_URL:-}
-      # Katalog-Abgleich in Sekunden (Standard: einmal pro Woche)
-      CATALOG_SYNC_INTERVAL_SECONDS: ${CATALOG_SYNC_INTERVAL_SECONDS:-604800}
+      # Katalog-Abgleich in Sekunden (Standard: alle 2 Stunden)
+      CATALOG_SYNC_INTERVAL_SECONDS: ${CATALOG_SYNC_INTERVAL_SECONDS:-7200}
     volumes:
       - ship-images:/var/www/html/storage/images
     # Grenzen, damit eine überlastete App nicht den ganzen Server mitzieht

@@ -53,7 +53,12 @@ final class ApiController extends Controller
         if (!$dryRun) {
             Importer::applyPlan($userId, $plan, $req->header('authorization') !== null ? 'api' : 'upload');
             // Beschreibungen und Bilder zu Loot und Ausrüstung im Hintergrund nachladen.
-            $res->afterSend(static function () use ($userId): void {
+            // Fanden Schiffe keinen Katalogeintrag (neue oder umbenannte Schiffe), den Katalog gleich aktualisieren und neu verknüpfen.
+            $refresh = \Hangar\Catalog\Refresh::afterImport(count($plan['unmatched'] ?? []));
+            $res->afterSend(static function () use ($userId, $refresh): void {
+                if ($refresh !== null) {
+                    $refresh();
+                }
                 Enrich::enrichPending($userId);
             });
         }
