@@ -86,6 +86,36 @@ final class WebTest extends DbTestCase
         }
     }
 
+    public function testSortOptionsAreParsedStrictlyAndSortGermanNames(): void
+    {
+        $this->assertNull(\Hangar\FleetFilter::parseSort([]));
+        $this->assertNull(\Hangar\FleetFilter::parseSort(['sort' => 'preis']));
+        $this->assertNull(\Hangar\FleetFilter::parseSort(['sort' => ['name']]));
+        $this->assertSame('name-desc', \Hangar\FleetFilter::parseSort(['sort' => 'name-desc']));
+
+        $list = [['n' => 'Zeta'], ['n' => 'Ärger'], ['n' => 'anna'], ['n' => 'Berta']];
+        $names = fn (?string $s) => array_column(\Hangar\FleetFilter::sortByName($list, fn ($e) => $e['n'], $s), 'n');
+        $this->assertSame(['Zeta', 'Ärger', 'anna', 'Berta'], $names(null));
+        $this->assertSame(['anna', 'Ärger', 'Berta', 'Zeta'], $names('name'));
+        $this->assertSame(['Zeta', 'Berta', 'Ärger', 'anna'], $names('name-desc'));
+    }
+
+    public function testCatalogSortsAscendingAndDescendingAndKeepsTheChoiceWhilePaging(): void
+    {
+        foreach (['Alpha', 'Charlie', 'Bravo'] as $i => $n) {
+            Db::insert('catalog_items', ['id' => "s$i", 'kind' => 'SHIP', 'slug' => strtolower($n), 'name' => $n, 'match_key' => strtolower($n), 'data' => '{}']);
+        }
+        $order = function (string $sort): array {
+            $body = $this->call('GET', '/catalog', 'loner', ['query' => ['sort' => $sort]])->body;
+            preg_match_all('#/catalog/ship/(alpha|bravo|charlie)"#', $body, $m);
+            return $m[1];
+        };
+        $this->assertSame(['alpha', 'bravo', 'charlie'], $order(''));
+        $this->assertSame(['alpha', 'bravo', 'charlie'], $order('name'));
+        $this->assertSame(['charlie', 'bravo', 'alpha'], $order('name-desc'));
+        $this->assertSame(['alpha', 'bravo', 'charlie'], $order('unsinn'));
+        $this->assertStringContainsString('<option value="name-desc" selected>', $this->call('GET', '/catalog', 'loner', ['query' => ['sort' => 'name-desc']])->body);
+    }
     public function testSecurityHeadersAndNoStoreForLoggedInPages(): void
     {
         $guest = $this->call('GET', '/login');

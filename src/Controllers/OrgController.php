@@ -275,8 +275,10 @@ final class OrgController extends Controller
         $filter = FleetFilter::parseFilter($req->query);
         $options = FleetFilter::options(array_column($all['entries'], 'specs'));
         $entries = array_values(array_filter($all['entries'], fn ($e) => FleetFilter::matches($e['specs'], $filter) && FleetFilter::matchesText($e, $filter['q'] ?? '')));
+        $sort = FleetFilter::parseSort($req->query);
+        $entries = FleetFilter::sortByName($entries, static fn (array $e): string => (string) $e['name'], $sort);
         return self::orgPage($org, 'org_hangar', [
-            'all' => $all, 'filter' => $filter, 'options' => $options, 'entries' => $entries,
+            'all' => $all, 'filter' => $filter, 'options' => $options, 'entries' => $entries, 'sort' => $sort,
             'filtering' => $filter !== [],
             'totalShips' => array_sum(array_column($entries, 'count')),
         ], 'Orga Hangar', 'hangar');

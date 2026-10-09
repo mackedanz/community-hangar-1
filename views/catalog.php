@@ -11,7 +11,7 @@ use Hangar\Http\View;
 
 /** @var array<string,mixed> $filter */
 /** @var array<string,list<string>> $options */
-$href = fn (array $over) => '/catalog?' . http_build_query(array_filter(['kind' => $kind, 'q' => $q] + $filter + $over, fn ($v) => $v !== ''));
+$href = fn (array $over) => '/catalog?' . http_build_query(array_filter(['kind' => $kind, 'q' => $q, 'sort' => $sort ?? ''] + $filter + $over, fn ($v) => $v !== ''));
 $pageLink = 'rounded border border-cyan-800/60 bg-teal-950/50 px-3 py-1.5 hover:border-cyan-500/80';
 ?>
 <div class="space-y-6">
@@ -32,7 +32,7 @@ $pageLink = 'rounded border border-cyan-800/60 bg-teal-950/50 px-3 py-1.5 hover:
 
   <?= View::partial('partials/fleet_filter', [
     'action' => '/catalog', 'filter' => $filter, 'q' => $q, 'options' => $options, 'hidden' => ['kind' => $kind],
-    'specs' => $kind === 'SHIP', 'placeholder' => 'Name oder Hersteller …',
+    'specs' => $kind === 'SHIP', 'placeholder' => 'Name oder Hersteller …', 'sort' => $sort ?? null,
   ]) ?>
 
   <?php if (!$items): ?>

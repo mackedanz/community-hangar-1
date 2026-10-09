@@ -27,13 +27,15 @@ final class HangarController extends Controller
             fn ($e) => $e['kind'] === 'SHIP' ? FleetFilter::parseSpecs($e['catalogItem']['data'] ?? null) : null,
             $entries,
         )));
+        $sort = FleetFilter::parseSort($req->query);
         $specFilter = array_diff_key($filter, ['q' => 1]);
         $shown = array_values(array_filter($entries, fn ($e) => ($q === '' || Hangar::matchesText($e, $q))
             && ($specFilter === [] || FleetFilter::matches(FleetFilter::parseSpecs($e['catalogItem']['data'] ?? null), $specFilter))));
         return self::page('hangar', [
             'entries' => $entries,
             'q' => $q, 'filter' => $filter, 'options' => $options, 'filtering' => $q !== '' || $specFilter !== [],
-            'groups' => Hangar::groupByKind($shown),
+            'groups' => Hangar::groupByKind(FleetFilter::sortByName($shown, static fn (array $e): string => Hangar::entryName($e), $sort)),
+            'sort' => $sort,
             'lastSync' => Community::getLastSync($viewer->id),
             'profile' => Community::getProfile($viewer->id, $viewer),
             'term' => $term,

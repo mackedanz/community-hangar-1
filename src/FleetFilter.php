@@ -90,6 +90,30 @@ final class FleetFilter
      * @param array<string,mixed> $params
      * @return array<string,mixed>
      */
+    /** Sortierungen der Listen (Schlüssel im Parameter "sort"); ohne Auswahl bleibt die jeweilige Standardreihenfolge. */
+    public const SORTS = ['name' => 'Name A–Z', 'name-desc' => 'Name Z–A'];
+
+    /** @param array<string,mixed> $params */
+    public static function parseSort(array $params): ?string
+    {
+        $v = $params['sort'] ?? null;
+        return is_string($v) && isset(self::SORTS[$v]) ? $v : null;
+    }
+
+    /**
+     * Sortiert nach Name (Groß-/Kleinschreibung und Umlaute nach deutschen Regeln); null lässt die Reihenfolge unverändert.
+     * @param list<array<string,mixed>> $list @param callable(array<string,mixed>):string $name @return list<array<string,mixed>>
+     */
+    public static function sortByName(array $list, callable $name, ?string $sort): array
+    {
+        if ($sort === null) {
+            return $list;
+        }
+        $collator = class_exists(\Collator::class) ? new \Collator('de_DE') : null;
+        usort($list, static fn (array $a, array $b): int => $collator !== null ? (int) $collator->compare($name($a), $name($b)) : strcasecmp($name($a), $name($b)));
+        return $sort === 'name-desc' ? array_reverse($list) : $list;
+    }
+
     public static function parseFilter(array $params): array
     {
         $one = static function (string $k) use ($params): ?string {

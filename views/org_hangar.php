@@ -18,7 +18,7 @@ use Hangar\Http\View;
 
   <?php if ($all['entries']): ?>
     <?= View::partial('partials/fleet_filter', [
-      'action' => '/o/' . $org['slug'] . '/hangar', 'filter' => $filter, 'q' => $filter['q'] ?? '', 'options' => $options,
+      'action' => '/o/' . $org['slug'] . '/hangar', 'filter' => $filter, 'q' => $filter['q'] ?? '', 'options' => $options, 'sort' => $sort,
     ]) ?>
   <?php endif; ?>
 

@@ -35,6 +35,8 @@ final class CatalogController extends Controller
         $kind = in_array($req->query('kind'), self::CATALOG_KINDS, true) ? (string) $req->query('kind') : 'SHIP';
         $page = min(1000, max(1, (int) $req->query('page', '1')));
         $key = Text::normalizeName($q);
+        $sort = FleetFilter::parseSort($req->query);
+        $order = $sort === 'name-desc' ? 'name DESC' : 'name ASC';
 
         $where = 'kind = ?';
         $params = [$kind];
@@ -56,7 +58,7 @@ final class CatalogController extends Controller
         if ($specFilter !== []) {
             // Spezifikationen stehen als JSON in der Spalte data; bei aktivem Filter wird in PHP gefiltert und geteilt.
             $matching = array_values(array_filter(
-                Db::all("SELECT $cols FROM catalog_items WHERE $where ORDER BY name ASC", $params),
+                Db::all("SELECT $cols FROM catalog_items WHERE $where ORDER BY $order", $params),
                 fn ($r) => FleetFilter::matches(FleetFilter::parseSpecs($r['data']), $specFilter),
             ));
             $total = count($matching);
@@ -64,7 +66,7 @@ final class CatalogController extends Controller
         } else {
             $total = (int) Db::val("SELECT COUNT(*) FROM catalog_items WHERE $where", $params);
             $items = Db::all(
-                "SELECT $cols FROM catalog_items WHERE $where ORDER BY name ASC LIMIT " . self::PAGE_SIZE . ' OFFSET ' . (($page - 1) * self::PAGE_SIZE),
+                "SELECT $cols FROM catalog_items WHERE $where ORDER BY $order LIMIT " . self::PAGE_SIZE . ' OFFSET ' . (($page - 1) * self::PAGE_SIZE),
                 $params,
             );
         }
@@ -80,7 +82,7 @@ final class CatalogController extends Controller
         return self::page('catalog', [
             'items' => $items, 'q' => $q, 'kind' => $kind, 'page' => $page,
             'pages' => max(1, (int) ceil($total / self::PAGE_SIZE)), 'total' => $total,
-            'kinds' => self::CATALOG_KINDS, 'filter' => $specFilter, 'options' => $options,
+            'kinds' => self::CATALOG_KINDS, 'filter' => $specFilter, 'options' => $options, 'sort' => $sort,
             'wide' => true,
         ], 'Katalog');
     }

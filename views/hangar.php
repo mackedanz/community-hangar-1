@@ -87,7 +87,7 @@ $panel = 'rounded border border-cyan-800/60 bg-teal-950/50';
       <?php if ($entries): ?>
         <div class="min-w-0 flex-1">
           <?= View::partial('partials/fleet_filter', [
-            'action' => '/hangar', 'filter' => $filter, 'q' => $q, 'options' => $options, 'boxed' => false,
+            'action' => '/hangar', 'filter' => $filter, 'q' => $q, 'options' => $options, 'boxed' => false, 'sort' => $sort,
             'placeholder' => 'Name, Hersteller, Rolle, LTI …',
           ]) ?>
         </div>
