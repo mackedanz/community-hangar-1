@@ -18,11 +18,15 @@ final class RsiOrgTest extends DbTestCase
     private array $roster = [];
     private bool $rsiDown = false;
     private int $requests = 0;
+    /** @var array<string,int> Handle (klein) => UEE Citizen Record auf den nachgebauten Dossier-Seiten; fehlt er, antwortet RSI mit 404 */
+    private array $dossiers = [];
 
     protected function setUp(): void
     {
         parent::setUp();
         RsiOrg::pause(0);
+        \Hangar\RsiHandleCheck::pause(0);
+        $this->dossiers = ['expg_mcdance' => 1638516, 'pilot_1' => 5, 'helfer' => 7, 'pilot_neu' => 5];
         $this->orgId = new_id();
         Db::insert('organizations', ['id' => $this->orgId, 'slug' => 'exp', 'name' => 'Exp', 'discord_guild_id' => '900000000000000009', 'created_by_id' => 'x']);
         $this->roster = [['eXpG_McDance', true], ['Pilot_1', true], ['Helfer', false]];
@@ -30,6 +34,13 @@ final class RsiOrgTest extends DbTestCase
         $this->requests = 0;
         Client::fake(function (string $method, string $url, array $h, ?string $body): array {
             $this->requests++;
+            if (preg_match('#/en/citizens/([^/?]+)$#', $url, $dm) === 1) {
+                $rec = $this->rsiDown ? null : ($this->dossiers[strtolower(urldecode($dm[1]))] ?? null);
+                return $this->rsiDown ? ['status' => 503, 'body' => '', 'headers' => []]
+                    : ($rec === null ? ['status' => 404, 'body' => 'nicht da', 'headers' => []]
+                        : ['status' => 200, 'body' => "<span>UEE Citizen Record</span>
+<strong> #{$rec} </strong>", 'headers' => []]);
+            }
             if ($this->rsiDown || !str_contains($url, '/api/orgs/getOrgMembers')) {
                 return ['status' => 503, 'body' => '', 'headers' => []];
             }
@@ -176,6 +187,76 @@ final class RsiOrgTest extends DbTestCase
         RsiOrg::sync($this->orgId);
         $by = array_column(Community::listMembers($this->orgId, $viewer), 'rsiStatus', 'name');
         $this->assertEquals(['Cem der Große' => 'unknown', 'eXpG_McDance (Micha)' => 'main', 'Pilot_1' => 'main', 'Ben' => 'affiliate'], $by);
+    }
+
+    public function testChangedHandleIsSuggestedByCitizenRecordForAdminsOnlyAndClearsAfterNicknameFix(): void
+    {
+        $mk = function (string $name, ?string $nick): string {
+            $u = $this->mkUser(['name' => $name]);
+            Db::insert('org_memberships', ['user_id' => $u['id'], 'org_id' => $this->orgId, 'role' => 'MEMBER', 'can_plan' => 0, 'nick' => $nick]);
+            return $u['id'];
+        };
+        $mc = $mk('Micha', 'eXpG_McDance (Micha)');
+        $anna = $mk('Anna', 'Pilot_1');
+        $admin = new \Hangar\Viewer($mc, 'Micha', null, null, [['id' => $this->orgId, 'slug' => 'exp', 'name' => 'Exp', 'iconUrl' => null, 'role' => 'ADMIN', 'canPlan' => true]], 'OK', 'csrf');
+        $member = VisibilityFilterTest::viewer($mc, [$this->orgId]);
+        $state = fn (\Hangar\Viewer $v): array => array_column(Community::listMembers($this->orgId, $v), null, 'id')[$anna];
+
+        RsiOrg::connect($this->orgId, 'EXPG');
+        RsiOrg::sync($this->orgId);
+        $r = \Hangar\RsiHandleCheck::run($this->orgId);
+        $this->assertSame(['bound' => 3 - 1, 'conflicts' => 0, 'suggested' => 0], $r);
+        $this->assertSame(5, (int) Db::val('SELECT record_no FROM rsi_checks WHERE user_id = ?', [$anna]));
+        $this->assertNull($state($admin)['rsiHint']);
+
+        // Anna heißt auf RSI jetzt anders; im Discord steht noch der alte Nickname
+        $this->roster = [['eXpG_McDance', true], ['Pilot_Neu', true], ['Helfer', false]];
+        $this->dossiers = ['expg_mcdance' => 1638516, 'pilot_neu' => 5, 'helfer' => 7];
+        RsiOrg::sync($this->orgId);
+        $r = \Hangar\RsiHandleCheck::run($this->orgId);
+        $this->assertSame(1, $r['suggested']);
+        $this->assertSame('out', $state($admin)['rsiStatus']);
+        $this->assertSame(['record' => 5, 'suggested' => 'Pilot_Neu'], $state($admin)['rsiHint']);
+        $this->assertNull($state($member)['rsiHint'], 'nur Admins sehen den Hinweis');
+        $this->assertSame('out', $state($member)['rsiStatus'], 'die Rahmenfarbe sehen alle');
+        $this->assertSame('Pilot_1', Db::val('SELECT nick FROM org_memberships WHERE user_id = ?', [$anna]), 'nichts wird automatisch geändert');
+
+        // Der Admin passt den Nickname im Discord an: wieder grün, kein Vorschlag mehr
+        Db::run('UPDATE org_memberships SET nick = ? WHERE user_id = ?', ['Pilot_Neu', $anna]);
+        \Hangar\RsiHandleCheck::run($this->orgId);
+        $this->assertSame('main', $state($admin)['rsiStatus']);
+        $this->assertNull($state($admin)['rsiHint']);
+        $this->assertSame('Pilot_Neu', Db::val('SELECT handle FROM rsi_checks WHERE user_id = ?', [$anna]));
+    }
+
+    public function testHandleOfAnotherCitizenRecordTurnsFrameYellow(): void
+    {
+        $u = $this->mkUser(['name' => 'Anna']);
+        Db::insert('org_memberships', ['user_id' => $u['id'], 'org_id' => $this->orgId, 'role' => 'MEMBER', 'can_plan' => 0, 'nick' => 'Pilot_1']);
+        $admin = new \Hangar\Viewer($u['id'], 'Anna', null, null, [['id' => $this->orgId, 'slug' => 'exp', 'name' => 'Exp', 'iconUrl' => null, 'role' => 'ADMIN', 'canPlan' => true]], 'OK', 'csrf');
+        RsiOrg::connect($this->orgId, 'EXPG');
+        RsiOrg::sync($this->orgId);
+        \Hangar\RsiHandleCheck::run($this->orgId);
+
+        $this->dossiers['pilot_1'] = 99;
+        Db::run('UPDATE rsi_checks SET record_checked_at = ? WHERE user_id = ?', ['2000-01-01 00:00:00', $u['id']]);
+        $r = \Hangar\RsiHandleCheck::run($this->orgId);
+        $this->assertSame(1, $r['conflicts']);
+        $m = Community::listMembers($this->orgId, $admin)[0];
+        $this->assertSame('out', $m['rsiStatus']);
+        $this->assertTrue($m['rsiHint']['conflict']);
+        $this->assertSame(5, (int) Db::val('SELECT record_no FROM rsi_checks WHERE user_id = ?', [$u['id']]), 'die gemerkte Nummer wird nicht überschrieben');
+    }
+
+    public function testUnreachableDossierChangesNothing(): void
+    {
+        $u = $this->mkUser(['name' => 'Anna']);
+        Db::insert('org_memberships', ['user_id' => $u['id'], 'org_id' => $this->orgId, 'role' => 'MEMBER', 'can_plan' => 0, 'nick' => 'Pilot_1']);
+        RsiOrg::connect($this->orgId, 'EXPG');
+        RsiOrg::sync($this->orgId);
+        $this->rsiDown = true;
+        $this->assertSame(['bound' => 0, 'conflicts' => 0, 'suggested' => 0], \Hangar\RsiHandleCheck::run($this->orgId));
+        $this->assertSame(0, (int) Db::val('SELECT COUNT(*) FROM rsi_checks'));
     }
 
     public function testRsiSyncViaWebIsLimitedPerOrgButDisconnectIsFree(): void

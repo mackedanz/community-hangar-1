@@ -132,8 +132,9 @@ final class Community
             return [];
         }
         $rows = Db::all(
-            'SELECT u.id, COALESCE(m.nick, u.name) AS name, m.nick, u.name AS user_name, u.image, u.rsi_handle, u.hangar_visibility, u.achievements_visibility, m.role
-               FROM org_memberships m JOIN users u ON u.id = m.user_id
+            'SELECT u.id, COALESCE(m.nick, u.name) AS name, m.nick, u.name AS user_name, u.image, u.rsi_handle, u.hangar_visibility, u.achievements_visibility, m.role,
+                    c.record_no, c.status AS check_status, c.suggested_handle
+               FROM org_memberships m JOIN users u ON u.id = m.user_id LEFT JOIN rsi_checks c ON c.user_id = u.id
               WHERE m.org_id = ? ORDER BY COALESCE(m.nick, u.name) ASC',
             [$orgId],
         );
@@ -165,14 +166,28 @@ final class Community
             }
         }
 
-        return array_map(function ($u) use ($ships, $ach, $orgsOf, $viewer, $roster, $rsi) {
+        // Hinweise zum RSI-Handle sehen nur Admins der Orga.
+        $isAdmin = false;
+        foreach ($viewer->orgs as $o) {
+            $isAdmin = $isAdmin || ($o['id'] === $orgId && $o['role'] === 'ADMIN');
+        }
+        return array_map(function ($u) use ($ships, $ach, $orgsOf, $viewer, $roster, $rsi, $isAdmin) {
             $orgIds = $orgsOf[$u['id']] ?? [];
+            $rsiStatus = $roster === null ? null : RsiOrg::status(
+                [$u['rsi_handle'], RsiOrg::handleFromName($u['nick']), RsiOrg::handleFromName($u['user_name'])],
+                $roster,
+                (int) $rsi['rsi_redacted'],
+            );
+            // Der Handle gehört zu einer anderen Citizen-Nummer als gespeichert: wie „nicht gefunden“ behandeln.
+            $conflict = $u['check_status'] === 'conflict' && in_array($rsiStatus, ['main', 'affiliate'], true);
+            if ($conflict) {
+                $rsiStatus = 'out';
+            }
             return [
-                'rsiStatus' => $roster === null ? null : RsiOrg::status(
-                    [$u['rsi_handle'], RsiOrg::handleFromName($u['nick']), RsiOrg::handleFromName($u['user_name'])],
-                    $roster,
-                    (int) $rsi['rsi_redacted'],
-                ),
+                'rsiStatus' => $rsiStatus,
+                'rsiHint' => $isAdmin && $rsiStatus !== null && !in_array($rsiStatus, ['main', 'affiliate'], true) && $u['record_no'] !== null
+                    ? ['record' => (int) $u['record_no'], 'suggested' => $conflict ? null : $u['suggested_handle']] + ($conflict ? ['conflict' => true] : [])
+                    : null,
                 'id' => $u['id'], 'name' => $u['name'], 'image' => $u['image'], 'rsiHandle' => $u['rsi_handle'],
                 'isAdmin' => $u['role'] === 'ADMIN',
                 // null = für den Betrachter nicht sichtbar

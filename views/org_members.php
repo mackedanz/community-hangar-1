@@ -45,6 +45,17 @@ $legend = ['main' => ['Mitglied', 'border-emerald-600'], 'affiliate' => ['Affili
               <?= $m['shipCount'] === null ? 'Hangar privat' : e($m['shipCount'] . ' Schiffe') ?>
               <?= $m['achievementCount'] !== null ? e(' · ' . $m['achievementCount'] . ' Errungenschaften') : '' ?>
             </div>
+            <?php if (!empty($m['rsiHint'])): $h = $m['rsiHint']; ?>
+              <div class="mt-1 text-xs text-yellow-400">
+                <?php if (!empty($h['conflict'])): ?>
+                  Der Handle gehört jetzt zu einem anderen RSI-Konto (erwartet #<?= (int) $h['record'] ?>). Bitte nachfragen.
+                <?php elseif ($h['suggested'] !== null): ?>
+                  Neuer Handle wahrscheinlich <strong><?= e($h['suggested']) ?></strong> (#<?= (int) $h['record'] ?>). Bitte im Discord den Nickname anpassen.
+                <?php else: ?>
+                  Handle nicht mehr auffindbar (RSI-Konto #<?= (int) $h['record'] ?>). Bitte nachfragen.
+                <?php endif; ?>
+              </div>
+            <?php endif; ?>
           </div>
         </a>
       </li>

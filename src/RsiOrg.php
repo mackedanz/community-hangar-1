@@ -173,6 +173,12 @@ final class RsiOrg
             try {
                 $r = self::sync($o['id']);
                 $out[$o['slug']] = "{$r['members']} Mitglieder, {$r['redacted']} verborgen";
+                try {
+                    $c = RsiHandleCheck::run($o['id']);
+                    $out[$o['slug']] .= ", Handle-Prüfung: {$c['bound']} bestätigt, {$c['conflicts']} Konflikte, {$c['suggested']} Vorschläge";
+                } catch (\Throwable $e) {
+                    $out[$o['slug']] .= ', Handle-Prüfung fehlgeschlagen: ' . $e->getMessage();
+                }
             } catch (OrgError $e) {
                 $out[$o['slug']] = 'Fehler: ' . $e->getMessage();
             }
