@@ -337,6 +337,51 @@ final class OrgsTest extends DbTestCase
         $this->assertTrue($this->canPlan($admin['id'], 'g-plan'));
     }
 
+    public function testCanRecruitForAdminsAndRecruiterRoleOnly(): void
+    {
+        $org = $this->mkOrg('g-rec', 'role-member');
+        Db::run('UPDATE organizations SET recruiter_role_ids = ? WHERE id = ?', ['role-rec,role-rec2', $org['id']]);
+        $recruiter = $this->mkDiscordUser();
+        $normal = $this->mkDiscordUser();
+        $admin = $this->mkDiscordUser();
+        $canRecruit = fn (string $uid): bool => (bool) Db::val('SELECT can_recruit FROM org_memberships WHERE user_id = ? AND org_id = ?', [$uid, $org['id']]);
+
+        $this->discord->guilds = [FakeDiscord::guild('g-rec')];
+        $this->discord->roles = ['g-rec' => ['role-member', 'role-rec2']];
+        Orgs::syncMemberships($recruiter['id']);
+        $this->discord->roles = ['g-rec' => ['role-member']];
+        Orgs::syncMemberships($normal['id']);
+        $this->discord->guilds = [FakeDiscord::guild('g-rec', ['permissions' => '8'])];
+        $this->discord->roles = ['g-rec' => []];
+        Orgs::syncMemberships($admin['id']);
+
+        $this->assertTrue($canRecruit($recruiter['id']));
+        $this->assertFalse($canRecruit($normal['id']));
+        $this->assertTrue($canRecruit($admin['id']));
+        $byId = fn (string $uid): array => array_column(Orgs::listMyOrgs($uid), null, 'id')[$org['id']];
+        $this->assertTrue($byId($recruiter['id'])['canRecruit']);
+        $this->assertFalse($byId($recruiter['id'])['canPlan'], 'Recruiter dürfen deshalb nicht planen');
+        $this->assertFalse($byId($normal['id'])['canRecruit']);
+        $this->assertTrue($byId($admin['id'])['canRecruit']);
+    }
+
+    public function testRecruiterRolesAreStoredKeptWithoutInputAndForceRecheck(): void
+    {
+        $admin = $this->mkDiscordUser();
+        $member = $this->mkDiscordUser();
+        $org = $this->mkOrg('g-rec-edit', null);
+        Db::insert('org_memberships', ['user_id' => $admin['id'], 'org_id' => $org['id'], 'role' => 'ADMIN']);
+        Db::insert('org_memberships', ['user_id' => $member['id'], 'org_id' => $org['id']]);
+        Db::run('UPDATE users SET membership_checked_at = NOW() WHERE id = ?', [$member['id']]);
+
+        Orgs::update($admin['id'], $org['id'], ['name' => 'Rec', 'memberRoleIds' => [], 'recruiterRoleIds' => ['222222222222222222']]);
+        $this->assertSame('222222222222222222', Db::val('SELECT recruiter_role_ids FROM organizations WHERE id = ?', [$org['id']]));
+        $this->assertNull(Db::val('SELECT membership_checked_at FROM users WHERE id = ?', [$member['id']]));
+
+        Orgs::update($admin['id'], $org['id'], ['name' => 'Rec 2', 'memberRoleIds' => []]);
+        $this->assertSame('222222222222222222', Db::val('SELECT recruiter_role_ids FROM organizations WHERE id = ?', [$org['id']]), 'ohne Angabe unverändert');
+    }
+
     public function testFetchesRolesEvenWhenOnlyPlannerRoleIsSet(): void
     {
         $this->mkOrg('g-plan-open', null, 'role-plan');

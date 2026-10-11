@@ -59,6 +59,45 @@ final class RsiOrgTest extends DbTestCase
         });
     }
 
+    public function testHandleFromNameFollowsTheStyleOfTheOrga(): void
+    {
+        $this->assertSame('mimack76', RsiOrg::handleFromName('(Vorname) mimack76 [Discordname]'));
+        $this->assertSame('mimack76', RsiOrg::handleFromName('(Vorname) [Tag] mimack76'), 'mehrere Klammern am Rand');
+        $this->assertSame('mimack76', RsiOrg::handleFromName('<x> mimack76 <Micha>'));
+        $this->assertSame('Micha', RsiOrg::handleFromName('Micha (mimack76)'), 'plain nimmt keinen Handle aus der Klammer');
+        $this->assertSame('mimack76', RsiOrg::handleFromName('Micha (mimack76)', 'round'));
+        $this->assertSame('mimack76', RsiOrg::handleFromName('Micha der Große [mimack76]', 'square'));
+        $this->assertSame('mimack76', RsiOrg::handleFromName('Micha {mimack76}', 'curly'));
+        $this->assertSame('mimack76', RsiOrg::handleFromName('Micha <mimack76>', 'angle'));
+        $this->assertSame('Vorname', RsiOrg::handleFromName('Micha (Vorname) (mimack76)', 'round'), 'erste gültige Klammer gewinnt');
+        $this->assertNull(RsiOrg::handleFromName('Micha [mimack76]', 'round'), 'andere Klammerart zählt nicht');
+        $this->assertNull(RsiOrg::handleFromName('mimack76', 'round'), 'ohne Klammer kein Handle');
+        $this->assertNull(RsiOrg::handleFromName('Micha (der Große)', 'round'), 'Leerzeichen im Inhalt: kein Handle');
+        $this->assertSame('mimack76', RsiOrg::handleFromName('  mimack76 ', 'unbekannt'), 'unbekannte Auswahl wie plain');
+        $this->assertSame('plain', RsiOrg::cleanHandleStyle('quatsch'));
+        $this->assertSame('angle', RsiOrg::cleanHandleStyle('angle'));
+    }
+
+    public function testMemberListUsesTheHandleStyleOfTheOrga(): void
+    {
+        $u = $this->mkUser(['name' => 'Anna']);
+        Db::insert('org_memberships', ['user_id' => $u['id'], 'org_id' => $this->orgId, 'role' => 'MEMBER', 'can_plan' => 0, 'nick' => 'Anna K. (Pilot_1)']);
+        $viewer = $this->recruiter($u['id']);
+        RsiOrg::connect($this->orgId, 'EXPG');
+        RsiOrg::sync($this->orgId);
+        $this->assertSame('out', Community::listMembers($this->orgId, $viewer)[0]['rsiStatus'], 'Handle steht in der Klammer, aber Stil ist plain');
+        \Hangar\Onboarding::setHandleStyle($this->orgId, 'round');
+        $this->assertSame('main', Community::listMembers($this->orgId, $viewer)[0]['rsiStatus']);
+        $this->assertSame('https://robertsspaceindustries.com/en/citizens/Pilot_1', Community::getProfile($u['id'], $viewer)['user']['rsiUrl']);
+        $this->expectException(OrgError::class);
+        \Hangar\Onboarding::setHandleStyle($this->orgId, 'quatsch');
+    }
+
+    private function recruiter(string $userId): \Hangar\Viewer
+    {
+        return new \Hangar\Viewer($userId, 'R', null, null, [['id' => $this->orgId, 'slug' => 'exp', 'name' => 'Exp', 'iconUrl' => null, 'role' => 'MEMBER', 'canPlan' => false, 'canRecruit' => true]], 'OK', 'csrf');
+    }
+
     public function testHandleFromName(): void
     {
         $this->assertSame('eXpG_McDance', RsiOrg::handleFromName('eXpG_McDance (Micha)'));
@@ -176,7 +215,7 @@ final class RsiOrgTest extends DbTestCase
         $mk('Anna', 'Pilot_1');
         $mk('Ben', null, 'helfer');
         $mk('Cem Müller', 'Cem der Große');
-        $viewer = VisibilityFilterTest::viewer($mc, [$this->orgId]);
+        $viewer = $this->recruiter($mc);
 
         $before = Community::listMembers($this->orgId, $viewer);
         $this->assertSame([null], array_values(array_unique(array_column($before, 'rsiStatus'))));
@@ -200,6 +239,7 @@ final class RsiOrgTest extends DbTestCase
         $anna = $mk('Anna', 'Pilot_1');
         $admin = new \Hangar\Viewer($mc, 'Micha', null, null, [['id' => $this->orgId, 'slug' => 'exp', 'name' => 'Exp', 'iconUrl' => null, 'role' => 'ADMIN', 'canPlan' => true]], 'OK', 'csrf');
         $member = VisibilityFilterTest::viewer($mc, [$this->orgId]);
+        $recruiter = $this->recruiter($mc);
         $state = fn (\Hangar\Viewer $v): array => array_column(Community::listMembers($this->orgId, $v), null, 'id')[$anna];
 
         RsiOrg::connect($this->orgId, 'EXPG');
@@ -217,8 +257,9 @@ final class RsiOrgTest extends DbTestCase
         $this->assertSame(1, $r['suggested']);
         $this->assertSame('out', $state($admin)['rsiStatus']);
         $this->assertSame(['record' => 5, 'suggested' => 'Pilot_Neu'], $state($admin)['rsiHint']);
-        $this->assertNull($state($member)['rsiHint'], 'nur Admins sehen den Hinweis');
-        $this->assertSame('out', $state($member)['rsiStatus'], 'die Rahmenfarbe sehen alle');
+        $this->assertSame(['record' => 5, 'suggested' => 'Pilot_Neu'], $state($recruiter)['rsiHint'], 'Recruiter sehen den Hinweis auch');
+        $this->assertNull($state($member)['rsiHint'], 'normale Mitglieder sehen keinen Hinweis');
+        $this->assertNull($state($member)['rsiStatus'], 'und keinen Rahmen');
         $this->assertSame('Pilot_1', Db::val('SELECT nick FROM org_memberships WHERE user_id = ?', [$anna]), 'nichts wird automatisch geändert');
 
         // Der Admin passt den Nickname im Discord an: wieder grün, kein Vorschlag mehr

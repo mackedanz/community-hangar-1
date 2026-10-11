@@ -24,6 +24,11 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2';
         Wer eine dieser Rollen hat, darf bei den Terminen Events anlegen und bearbeiten. Orga-Admins
         dürfen das immer. Ohne Eintrag planen nur Admins.
       </p>
+      <?= View::partial('partials/role_fields', ['values' => $recruiterRoleIds, 'name' => 'recruiterRoleIds', 'nameField' => 'recruiterRoleNames', 'labels' => $roleLabels, 'legend' => 'Rollen-IDs der Recruiter (sehen die RSI-Zugehörigkeit)']) ?>
+      <p class="text-xs text-zinc-500">
+        Recruiter und Orga-Admins sehen in der Mitgliederliste die Rahmen (Zugehörigkeit zur RSI-Orga), den Filter und die
+        Hinweise zu geänderten Handles. Alle anderen Mitglieder sehen die Liste ohne. Ohne Eintrag sehen es nur Admins.
+      </p>
       <?= View::partial('partials/role_help') ?>
       <p class="text-xs text-zinc-500">Nach einer Änderung der Rollen werden alle Mitglieder bei ihrem nächsten Seitenaufruf neu geprüft.</p>
       <button class="rounded bg-indigo-600 px-4 py-2 font-medium hover:bg-indigo-500">Speichern</button>
@@ -142,7 +147,7 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2';
     <p class="text-sm text-zinc-400">
       Mit dem Kürzel deiner Orga auf RSI (z. B. <b>EXPG</b>, steht in der Adresse robertsspaceindustries.com/orgs/<b>EXPG</b>)
       färbt die App in der Mitgliederliste den Rahmen jedes Mitglieds nach seiner Zugehörigkeit zur RSI-Orga. Der RSI-Handle
-      wird aus dem Server-Nickname abgeleitet (ein Zusatz in Klammern am Ende wird ignoriert). Es werden nur öffentliche Daten
+      wird aus dem Server-Nickname abgeleitet, je nach Auswahl unten. Es werden nur öffentliche Daten
       gelesen; die Liste wird täglich aktualisiert. Leer lassen und speichern trennt die Verbindung.
     </p>
     <form method="post" action="/orgs/rsi" class="flex flex-wrap items-end gap-2">
@@ -153,6 +158,19 @@ $input = 'w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2';
         <input name="rsiSid" maxlength="20" value="<?= e($full['rsi_sid'] ?? '') ?>" class="w-40 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 uppercase">
       </label>
       <button class="rounded border border-zinc-600 px-3 py-2 text-sm hover:bg-zinc-800">Speichern und abgleichen</button>
+    </form>
+    <form method="post" action="/orgs/handle-style" class="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+      <input type="hidden" name="orgId" value="<?= e($full['id']) ?>">
+      <label class="space-y-1">
+        <span class="block text-sm text-zinc-400">Wo steht der RSI-Handle im Nickname?</span>
+        <select name="handleStyle" class="rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm">
+          <?php foreach (\Hangar\RsiOrg::HANDLE_STYLES as $k => $label): ?>
+            <option value="<?= e($k) ?>"<?= \Hangar\RsiOrg::cleanHandleStyle($full['handle_style'] ?? null) === $k ? ' selected' : '' ?>><?= e($label) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </label>
+      <button class="rounded border border-zinc-600 px-3 py-2 text-sm hover:bg-zinc-800">Speichern</button>
     </form>
     <?php if (!empty($full['rsi_sid'])): ?>
       <p class="text-xs text-zinc-500">

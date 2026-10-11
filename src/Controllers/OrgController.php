@@ -75,6 +75,7 @@ final class OrgController extends Controller
             'full' => $full,
             'memberRoleIds' => Orgs::parseRoleIds($full['member_role_ids']),
             'plannerRoleIds' => Orgs::parseRoleIds($full['planner_role_ids']),
+            'recruiterRoleIds' => Orgs::parseRoleIds($full['recruiter_role_ids'] ?? null),
             'roleLabels' => Orgs::parseRoleLabels($full['role_labels']),
             'maxRoles' => Orgs::MAX_ROLES,
             'allowed' => Db::all('SELECT discord_id, name, avatar_url, fixed FROM org_allowed_members WHERE org_id = ? ORDER BY name ASC', [$org['id']]),
@@ -95,8 +96,10 @@ final class OrgController extends Controller
                 'name' => (string) $req->input('name', ''),
                 'memberRoleIds' => $req->post['memberRoleIds'] ?? [],
                 'plannerRoleIds' => $req->post['plannerRoleIds'] ?? [],
+                'recruiterRoleIds' => $req->post['recruiterRoleIds'] ?? [],
                 'roleNames' => self::roleNames($req->post['memberRoleIds'] ?? [], $req->post['memberRoleNames'] ?? [])
-                    + self::roleNames($req->post['plannerRoleIds'] ?? [], $req->post['plannerRoleNames'] ?? []),
+                    + self::roleNames($req->post['plannerRoleIds'] ?? [], $req->post['plannerRoleNames'] ?? [])
+                    + self::roleNames($req->post['recruiterRoleIds'] ?? [], $req->post['recruiterRoleNames'] ?? []),
             ]);
         } catch (\Throwable $e) {
             return Flash::error("/o/$slug/settings", self::errorMessage($e));
@@ -143,6 +146,21 @@ final class OrgController extends Controller
             return Flash::error("/o/$slug/settings", self::errorMessage($e));
         }
         return Flash::ok("/o/$slug/settings", "Gespeichert und abgeglichen: $result.");
+    }
+
+    /** Wo im Nickname der RSI-Handle steht (nur Orga-Admins). */
+    public static function saveHandleStyle(Request $req): Response
+    {
+        $viewer = Auth::requireViewer($req);
+        $orgId = (string) $req->input('orgId', '');
+        $slug = (string) Db::val('SELECT slug FROM organizations WHERE id = ?', [$orgId]);
+        try {
+            Orgs::requireOrgAdmin($viewer->id, $orgId);
+            Onboarding::setHandleStyle($orgId, (string) $req->input('handleStyle', ''));
+        } catch (\Throwable $e) {
+            return Flash::error("/o/$slug/settings", self::errorMessage($e));
+        }
+        return Flash::ok("/o/$slug/settings", 'Gespeichert.');
     }
 
     /** Logo, Hintergrund und Deckkraft der Installation (nur Admins; die Orga-Admins sind die Discord-Server-Admins). */
@@ -256,7 +274,8 @@ final class OrgController extends Controller
         // Filter nach RSI-Status (Klick auf die Legende); die Anzahl je Status zählt über alle Mitglieder.
         $counts = array_count_values(array_filter(array_column($all, 'rsiStatus')));
         $rsi = (string) $req->query('rsi', '');
-        $rsi = in_array($rsi, ['main', 'affiliate', 'out', 'unknown'], true) ? $rsi : '';
+        // Rahmen, Legende und Filter gibt es nur für Recruiter und Admins (Community::listMembers liefert sonst keinen Status).
+        $rsi = !empty($org['canRecruit']) && in_array($rsi, ['main', 'affiliate', 'out', 'unknown'], true) ? $rsi : '';
         $members = $rsi === '' ? $all : array_values(array_filter($all, static fn (array $m): bool => $m['rsiStatus'] === $rsi));
         return self::orgPage($org, 'org_members', [
             'members' => $members,

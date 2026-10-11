@@ -79,6 +79,7 @@ final class App
         $r->post('/orgs/delete', [OrgController::class, 'delete']);
         $r->post('/orgs/sync-allowlist', [OrgController::class, 'syncAllowlist']);
         $r->post('/orgs/rsi', [OrgController::class, 'saveRsi']);
+        $r->post('/orgs/handle-style', [OrgController::class, 'saveHandleStyle']);
         $r->post('/orgs/branding', [OrgController::class, 'saveBranding']);
         $r->post('/orgs/discord-events', [OrgController::class, 'saveDiscordEvents']);
         $r->get('/o/{slug}', [OrgController::class, 'home']);

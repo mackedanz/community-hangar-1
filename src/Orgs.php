@@ -49,8 +49,10 @@ final class Orgs
                 $admin = Discord::isGuildAdmin($byGuild[$org['discord_guild_id']]);
                 $required = self::parseRoleIds($org['member_role_ids']);
                 $planners = self::parseRoleIds($org['planner_role_ids']);
+                $recruiters = self::parseRoleIds($org['recruiter_role_ids'] ?? null);
                 $canPlan = $admin;
-                $needRoles = !$admin && ($required !== [] || $planners !== []);
+                $canRecruit = $admin;
+                $needRoles = !$admin && ($required !== [] || $planners !== [] || $recruiters !== []);
                 $member = null;
                 try {
                     $member = Discord::member($token, $org['discord_guild_id']);
@@ -67,8 +69,9 @@ final class Orgs
                         continue;
                     }
                     $canPlan = $roles !== null && array_intersect($planners, $roles) !== [];
+                    $canRecruit = $roles !== null && array_intersect($recruiters, $roles) !== [];
                 }
-                $valid[] = ['orgId' => $org['id'], 'role' => $admin ? 'ADMIN' : 'MEMBER', 'canPlan' => $canPlan, 'nick' => $nick];
+                $valid[] = ['orgId' => $org['id'], 'role' => $admin ? 'ADMIN' : 'MEMBER', 'canPlan' => $canPlan, 'canRecruit' => $canRecruit, 'nick' => $nick];
             }
 
             Db::transaction(function () use ($userId, $valid, $nowDb): void {
@@ -80,9 +83,9 @@ final class Orgs
                 }
                 foreach ($valid as $v) {
                     Db::run(
-                        'INSERT INTO org_memberships (user_id, org_id, role, can_plan, nick, verified_at) VALUES (?,?,?,?,?,?)
-                         ON DUPLICATE KEY UPDATE role = VALUES(role), can_plan = VALUES(can_plan), nick = VALUES(nick), verified_at = VALUES(verified_at)',
-                        [$userId, $v['orgId'], $v['role'], $v['canPlan'], $v['nick'], $nowDb],
+                        'INSERT INTO org_memberships (user_id, org_id, role, can_plan, can_recruit, nick, verified_at) VALUES (?,?,?,?,?,?,?)
+                         ON DUPLICATE KEY UPDATE role = VALUES(role), can_plan = VALUES(can_plan), can_recruit = VALUES(can_recruit), nick = VALUES(nick), verified_at = VALUES(verified_at)',
+                        [$userId, $v['orgId'], $v['role'], $v['canPlan'], $v['canRecruit'], $v['nick'], $nowDb],
                     );
                 }
                 Db::run("UPDATE users SET membership_checked_at = ?, membership_status = 'OK' WHERE id = ?", [$nowDb, $userId]);
@@ -110,7 +113,7 @@ final class Orgs
     public static function listMyOrgs(string $userId): array
     {
         $rows = Db::all(
-            'SELECT o.id, o.slug, o.name, o.icon_url, m.role, m.can_plan
+            'SELECT o.id, o.slug, o.name, o.icon_url, m.role, m.can_plan, m.can_recruit
                FROM org_memberships m JOIN organizations o ON o.id = m.org_id
               WHERE m.user_id = ? ORDER BY o.name ASC',
             [$userId],
@@ -122,6 +125,7 @@ final class Orgs
             'iconUrl' => $r['icon_url'],
             'role' => $r['role'],
             'canPlan' => $r['role'] === 'ADMIN' || (bool) $r['can_plan'],
+            'canRecruit' => $r['role'] === 'ADMIN' || (bool) $r['can_recruit'],
         ], $rows);
     }
 
@@ -183,6 +187,7 @@ final class Orgs
             throw new OrgError('Name zu lang');
         }
         $planner = array_key_exists('plannerRoleIds', $in) && $in['plannerRoleIds'] !== null;
+        $recruiter = array_key_exists('recruiterRoleIds', $in) && $in['recruiterRoleIds'] !== null;
         $names = null;
         if (isset($in['roleNames']) && is_array($in['roleNames'])) {
             $names = [];
@@ -195,6 +200,8 @@ final class Orgs
             'memberRoleIds' => self::cleanRoleIds($in['memberRoleIds'] ?? []),
             'plannerRoleIds' => $planner ? self::cleanRoleIds($in['plannerRoleIds']) : null,
             'plannerGiven' => $planner,
+            'recruiterRoleIds' => $recruiter ? self::cleanRoleIds($in['recruiterRoleIds']) : null,
+            'recruiterGiven' => $recruiter,
             'roleNames' => $names,
         ];
     }
@@ -254,16 +261,17 @@ final class Orgs
         self::requireOrgAdmin($userId, $orgId);
         $before = self::find($orgId) ?? throw new OrgError('Orga nicht gefunden.');
         $planner = $data['plannerGiven'] ? $data['plannerRoleIds'] : $before['planner_role_ids'];
+        $recruiter = $data['recruiterGiven'] ? $data['recruiterRoleIds'] : ($before['recruiter_role_ids'] ?? null);
         $labels = self::buildRoleLabels(
-            [...self::parseRoleIds($data['memberRoleIds']), ...self::parseRoleIds($planner)],
+            [...self::parseRoleIds($data['memberRoleIds']), ...self::parseRoleIds($planner), ...self::parseRoleIds($recruiter)],
             $data['roleNames'] ?? self::parseRoleLabels($before['role_labels']),
         );
         Db::run(
-            'UPDATE organizations SET name = ?, member_role_ids = ?, planner_role_ids = ?, role_labels = ? WHERE id = ?',
-            [$data['name'], $data['memberRoleIds'], $planner, $labels, $orgId],
+            'UPDATE organizations SET name = ?, member_role_ids = ?, planner_role_ids = ?, recruiter_role_ids = ?, role_labels = ? WHERE id = ?',
+            [$data['name'], $data['memberRoleIds'], $planner, $recruiter, $labels, $orgId],
         );
         // Geänderte Rollen: alle anderen Mitglieder beim nächsten Seitenaufruf neu prüfen.
-        if ($before['member_role_ids'] !== $data['memberRoleIds'] || $before['planner_role_ids'] !== $planner) {
+        if ($before['member_role_ids'] !== $data['memberRoleIds'] || $before['planner_role_ids'] !== $planner || ($before['recruiter_role_ids'] ?? null) !== $recruiter) {
             Db::run(
                 'UPDATE users SET membership_checked_at = NULL
                   WHERE id <> ? AND id IN (SELECT user_id FROM org_memberships WHERE org_id = ?)',

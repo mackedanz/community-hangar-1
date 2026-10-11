@@ -53,11 +53,12 @@ final class RsiHandleCheck
      */
     public static function run(string $orgId): array
     {
-        $org = Db::one('SELECT rsi_synced_at FROM organizations WHERE id = ?', [$orgId]);
+        $org = Db::one('SELECT rsi_synced_at, handle_style FROM organizations WHERE id = ?', [$orgId]);
         $out = ['bound' => 0, 'conflicts' => 0, 'suggested' => 0];
         if ($org === null || $org['rsi_synced_at'] === null) {
             return $out;
         }
+        $style = (string) $org['handle_style'];
         $roster = [];
         foreach (Db::all('SELECT handle FROM org_rsi_members WHERE org_id = ?', [$orgId]) as $r) {
             $roster[strtolower($r['handle'])] = $r['handle'];
@@ -84,7 +85,7 @@ final class RsiHandleCheck
         $recheckBefore = Time::db(Time::now()->modify('-' . self::RECHECK_DAYS . ' days'));
         foreach ($rows as $u) {
             $matched = null;
-            foreach ([$u['rsi_handle'], RsiOrg::handleFromName($u['nick']), RsiOrg::handleFromName($u['name'])] as $cand) {
+            foreach ([$u['rsi_handle'], RsiOrg::handleFromName($u['nick'], $style), RsiOrg::handleFromName($u['name'])] as $cand) {
                 if ($cand !== null && $cand !== '') {
                     $claimed[strtolower($cand)] = true;
                     $matched ??= $roster[strtolower($cand)] ?? null;

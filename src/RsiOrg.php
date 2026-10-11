@@ -34,17 +34,54 @@ final class RsiOrg
         return preg_match('/^[A-Z0-9_-]{2,20}$/', $sid) === 1 ? $sid : null;
     }
 
+    /** Wo im Nickname der Handle steht (Auswahl je Orga, Schlüssel in organizations.handle_style). */
+    public const HANDLE_STYLES = [
+        'plain' => 'Außerhalb aller Klammern (z. B. „(Vorname) Handle [Discordname]“)',
+        'round' => 'In runden Klammern (z. B. „Discordname (Handle)“)',
+        'square' => 'In eckigen Klammern (z. B. „Discordname [Handle]“)',
+        'curly' => 'In geschweiften Klammern (z. B. „Discordname {Handle}“)',
+        'angle' => 'In spitzen Klammern (z. B. „Discordname <Handle>“)',
+    ];
+
+    private const GROUP_PATTERNS = [
+        'round' => '/\(([^()]*)\)/u',
+        'square' => '/\[([^\[\]]*)\]/u',
+        'curly' => '/\{([^{}]*)\}/u',
+        'angle' => '/<([^<>]*)>/u',
+    ];
+
+    public static function cleanHandleStyle(?string $style): string
+    {
+        return $style !== null && isset(self::HANDLE_STYLES[$style]) ? $style : 'plain';
+    }
+
     /**
-     * RSI-Handle aus einem Discord-Namen: ein Zusatz in Klammern am Ende („eXpG_McDance (Micha)“) oder am Anfang („(SpaceTrotter) mimack76“) gehört nicht dazu.
-     * Gibt null zurück, wenn kein gültiger Handle (Buchstaben, Ziffern, _ und -) übrig bleibt.
+     * RSI-Handle aus einem Discord-Namen. $style sagt, wo er steht:
+     * „plain“: Klammerzusätze am Anfang und Ende („eXpG_McDance (Micha)“, „(SpaceTrotter) mimack76 [Micha]“) gehören nicht dazu;
+     * sonst: der Inhalt der ersten Klammer dieser Art, die einen gültigen Handle enthält („Micha (mimack76)“).
+     * Gibt null zurück, wenn kein gültiger Handle (Buchstaben, Ziffern, _ und -) herauskommt.
      */
-    public static function handleFromName(?string $name): ?string
+    public static function handleFromName(?string $name, string $style = 'plain'): ?string
     {
         if ($name === null) {
             return null;
         }
-        $h = trim((string) preg_replace(['/\s*[(\[{][^)\]}]*[)\]}]\s*$/u', '/^\s*[(\[{][^)\]}]*[)\]}]\s*/u'], '', trim($name)));
-        return preg_match('/^[A-Za-z0-9_-]{2,100}$/', $h) === 1 ? $h : null;
+        $valid = static fn (string $h): ?string => preg_match('/^[A-Za-z0-9_-]{2,100}$/', $h) === 1 ? $h : null;
+        if (isset(self::GROUP_PATTERNS[$style])) {
+            preg_match_all(self::GROUP_PATTERNS[$style], $name, $m);
+            foreach ($m[1] as $inner) {
+                if (($h = $valid(trim($inner))) !== null) {
+                    return $h;
+                }
+            }
+            return null;
+        }
+        $h = trim($name);
+        do {
+            $before = $h;
+            $h = trim((string) preg_replace(['/\s*[(\[{<][^)\]}>]*[)\]}>]\s*$/u', '/^\s*[(\[{<][^)\]}>]*[)\]}>]\s*/u'], '', $h));
+        } while ($h !== $before);
+        return $valid($h);
     }
 
     /**

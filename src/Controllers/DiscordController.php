@@ -240,7 +240,7 @@ final class DiscordController extends Controller
         $id = (string) ($i['data']['custom_id'] ?? '');
         $token = (string) ($i['token'] ?? '');
         $sync = false;
-        if ($id === 'onb:use' || $id === 'onb:plan') {
+        if ($id === 'onb:use' || $id === 'onb:plan' || $id === 'onb:recruit') {
             $values = array_values(array_map('strval', (array) ($i['data']['values'] ?? [])));
             $names = [];
             foreach ((array) ($i['data']['resolved']['roles'] ?? []) as $rid => $role) {
@@ -248,9 +248,16 @@ final class DiscordController extends Controller
                     $names[(string) $rid] = (string) $role['name'];
                 }
             }
-            Onboarding::setRoles($org['id'], $id === 'onb:use' ? 'use' : 'plan', $values, $names);
+            Onboarding::setRoles($org['id'], ['onb:use' => 'use', 'onb:plan' => 'plan', 'onb:recruit' => 'recruit'][$id], $values, $names);
             $org = Orgs::find($org['id']) ?? $org;
             $sync = Orgs::parseRoleIds($org['member_role_ids']) !== [];
+        } elseif ($id === 'onb:style') {
+            try {
+                Onboarding::setHandleStyle($org['id'], (string) (((array) ($i['data']['values'] ?? []))[0] ?? ''));
+            } catch (OrgError $e) {
+                return self::say($e->getMessage());
+            }
+            $org = Orgs::find($org['id']) ?? $org;
         } elseif ($id === 'onb:sync') {
             $sync = true;
         } else {
@@ -299,13 +306,16 @@ final class DiscordController extends Controller
         };
         $use = Orgs::parseRoleIds($org['member_role_ids']);
         $plan = Orgs::parseRoleIds($org['planner_role_ids']);
+        $recruit = Orgs::parseRoleIds($org['recruiter_role_ids'] ?? null);
         $names = static fn (array $ids): string => $ids === [] ? '–' : implode(', ', array_map(static fn (string $id): string => $labels[$id] ?? "<@&$id>", $ids));
         $text = "**Community-Hangar: {$org['name']}**\n"
             . "Dürfen das Tool nutzen: {$names($use)}\n"
             . "Dürfen Events planen: {$names($plan)}\n"
+            . "Recruiter (sehen die RSI-Zugehörigkeit): {$names($recruit)}\n"
             . (!empty($org['rsi_sid']) ? "RSI-Orga: {$org['rsi_org_name']} ({$org['rsi_sid']})\n" : '')
+            . 'RSI-Handle im Nickname: ' . \Hangar\RsiOrg::HANDLE_STYLES[\Hangar\RsiOrg::cleanHandleStyle($org['handle_style'] ?? null)] . "\n"
             . "\n"
-            . 'Wähle unten die Rollen. Wer eine Nutzungs- oder Planer-Rolle hat, darf sich auf ' . \Hangar\Config::appUrl() . ' anmelden.'
+            . 'Wähle unten die Rollen. Wer eine Nutzungs-, Planer- oder Recruiter-Rolle hat, darf sich auf ' . \Hangar\Config::appUrl() . ' anmelden.'
             . ($note !== null ? "\n\n$note" : '');
         return [
             'flags' => self::EPHEMERAL,
@@ -314,6 +324,15 @@ final class DiscordController extends Controller
             'components' => [
                 $select('onb:use', 'Wer darf das Tool nutzen?', $use),
                 $select('onb:plan', 'Wer darf Events planen? (optional)', $plan),
+                $select('onb:recruit', 'Wer sind die Recruiter? (optional)', $recruit),
+                ['type' => 1, 'components' => [[
+                    'type' => 3, 'custom_id' => 'onb:style', 'placeholder' => 'Wo steht der RSI-Handle im Nickname?', 'min_values' => 1, 'max_values' => 1,
+                    'options' => array_map(
+                        static fn (string $k, string $label): array => ['label' => mb_substr($label, 0, 100), 'value' => $k, 'default' => $k === \Hangar\RsiOrg::cleanHandleStyle($org['handle_style'] ?? null)],
+                        array_keys(\Hangar\RsiOrg::HANDLE_STYLES),
+                        \Hangar\RsiOrg::HANDLE_STYLES,
+                    ),
+                ]]],
                 ['type' => 1, 'components' => [['type' => 2, 'style' => 2, 'custom_id' => 'onb:sync', 'label' => 'Mitglieder jetzt abgleichen']]],
             ],
         ];

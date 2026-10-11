@@ -157,7 +157,7 @@ final class Community
         }
 
         // RSI-Zugehörigkeit: nur, wenn die Orga ein RSI-Kürzel hat und die Mitgliederliste schon abgeglichen wurde.
-        $rsi = Db::one('SELECT rsi_sid, rsi_redacted, rsi_synced_at FROM organizations WHERE id = ?', [$orgId]);
+        $rsi = Db::one('SELECT rsi_sid, rsi_redacted, rsi_synced_at, handle_style FROM organizations WHERE id = ?', [$orgId]);
         $roster = null;
         if ($rsi !== null && $rsi['rsi_sid'] !== null && $rsi['rsi_synced_at'] !== null) {
             $roster = [];
@@ -166,15 +166,15 @@ final class Community
             }
         }
 
-        // Hinweise zum RSI-Handle sehen nur Admins der Orga.
+        // Die RSI-Zugehörigkeit (Rahmen, Filter, Hinweise zum Handle) sehen nur Recruiter und Admins der Orga.
         $isAdmin = false;
         foreach ($viewer->orgs as $o) {
-            $isAdmin = $isAdmin || ($o['id'] === $orgId && $o['role'] === 'ADMIN');
+            $isAdmin = $isAdmin || ($o['id'] === $orgId && ($o['role'] === 'ADMIN' || !empty($o['canRecruit'])));
         }
         return array_map(function ($u) use ($ships, $ach, $orgsOf, $viewer, $roster, $rsi, $isAdmin) {
             $orgIds = $orgsOf[$u['id']] ?? [];
-            $rsiStatus = $roster === null ? null : RsiOrg::status(
-                [$u['rsi_handle'], RsiOrg::handleFromName($u['nick']), RsiOrg::handleFromName($u['user_name'])],
+            $rsiStatus = $roster === null || !$isAdmin ? null : RsiOrg::status(
+                [$u['rsi_handle'], RsiOrg::handleFromName($u['nick'], (string) $rsi['handle_style']), RsiOrg::handleFromName($u['user_name'])],
                 $roster,
                 (int) $rsi['rsi_redacted'],
             );
@@ -258,15 +258,15 @@ final class Community
         if ($orgIds === []) {
             return null;
         }
-        $names = array_column(Db::all('SELECT nick FROM org_memberships WHERE user_id = ?', [$user['id']]), 'nick');
-        $nickHandle = null;
-        foreach ($names as $n) {
-            $nickHandle ??= RsiOrg::handleFromName($n);
+        $nickHandles = [];
+        foreach (Db::all('SELECT m.nick, o.handle_style FROM org_memberships m JOIN organizations o ON o.id = m.org_id WHERE m.user_id = ?', [$user['id']]) as $r) {
+            $nickHandles[] = RsiOrg::handleFromName($r['nick'], (string) $r['handle_style']);
         }
-        $cands = array_values(array_unique(array_filter(array_map(
-            static fn ($n): ?string => RsiOrg::handleFromName($n),
-            [...$names, $user['name'] ?? null],
-        ))));
+        $nickHandle = null;
+        foreach ($nickHandles as $n) {
+            $nickHandle ??= $n;
+        }
+        $cands = array_values(array_unique(array_filter([...$nickHandles, RsiOrg::handleFromName($user['name'] ?? null)])));
         if ($cands === []) {
             return null;
         }

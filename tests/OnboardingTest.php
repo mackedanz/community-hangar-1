@@ -204,6 +204,42 @@ final class OnboardingTest extends DbTestCase
         return $this->post($this->command('32', ['type' => 3, 'data' => ['custom_id' => $customId, 'values' => $values, 'resolved' => ['roles' => $roles]]]));
     }
 
+    public function testRecruiterRoleSelectIsOfferedAndSaved(): void
+    {
+        $res = $this->json($this->post($this->command()));
+        $ids = [];
+        foreach ($res['data']['components'] as $row) {
+            $ids[] = $row['components'][0]['custom_id'] ?? '';
+        }
+        $this->assertContains('onb:recruit', $ids);
+        $this->assertLessThanOrEqual(5, count($res['data']['components']), 'Discord erlaubt höchstens 5 Zeilen');
+
+        $roleRec = '800000000000000009';
+        $this->select('onb:recruit', [$roleRec], [$roleRec => 'Recruiter']);
+        $this->assertSame($roleRec, Db::val('SELECT recruiter_role_ids FROM organizations'));
+        $this->assertStringContainsString('Recruiter', (string) Db::val('SELECT role_labels FROM organizations'));
+    }
+
+    public function testHandleStyleSelectIsOfferedAndSaved(): void
+    {
+        $res = $this->json($this->post($this->command()));
+        $style = null;
+        foreach ($res['data']['components'] as $row) {
+            if (($row['components'][0]['custom_id'] ?? '') === 'onb:style') {
+                $style = $row['components'][0];
+            }
+        }
+        $this->assertNotNull($style);
+        $this->assertSame(3, $style['type']);
+        $this->assertSame(['plain', 'round', 'square', 'curly', 'angle'], array_column($style['options'], 'value'));
+        $this->assertSame([true, false, false, false, false], array_column($style['options'], 'default'));
+
+        $this->select('onb:style', ['square']);
+        $this->assertSame('square', Db::val('SELECT handle_style FROM organizations'));
+        $this->select('onb:style', ['quatsch']);
+        $this->assertSame('square', Db::val('SELECT handle_style FROM organizations'), 'ungültige Auswahl wird abgewiesen');
+    }
+
     public function testRoleSelectionSavesRolesAndNames(): void
     {
         $this->post($this->command());
