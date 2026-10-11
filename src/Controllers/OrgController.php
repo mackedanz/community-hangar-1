@@ -202,9 +202,9 @@ final class OrgController extends Controller
         $slug = (string) Db::val('SELECT slug FROM organizations WHERE id = ?', [$orgId]);
         try {
             Orgs::requireOrgAdmin($viewer->id, $orgId);
-            // Der Abgleich ruft bis zu 100 Seiten bei RSI ab: je Orga höchstens 3 Mal pro Stunde (Trennen ist frei).
+            // Der Abgleich ruft bis zu 100 Seiten bei RSI ab: je Orga höchstens 10 Mal pro Stunde (Trennen ist frei).
             if (trim((string) $req->input('rsiSid', '')) !== '') {
-                $limit = RateLimit::hit("rsi-sync:$orgId", 3, 3600);
+                $limit = RateLimit::hit("rsi-sync:$orgId", 10, 3600);
                 if (!$limit['ok']) {
                     throw new OrgError('Der RSI-Abgleich lief zu oft. Bitte in ' . (int) ceil($limit['retryAfterSec'] / 60) . ' Minuten erneut versuchen.');
                 }

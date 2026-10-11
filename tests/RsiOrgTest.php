@@ -310,13 +310,13 @@ final class RsiOrgTest extends DbTestCase
             \Hangar\Auth::reset();
             return \Hangar\App::handle(new \Hangar\Http\Request('POST', '/orgs/rsi', [], ['_csrf' => $csrf, 'orgId' => $this->orgId, 'rsiSid' => $sid], [], [\Hangar\Auth::COOKIE => $s['token']]));
         };
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 10; $i++) {
             $post('EXPG');
         }
         $requestsBefore = $this->requests;
         $res = $post('EXPG');
         $this->assertSame(303, $res->status);
-        $this->assertSame($requestsBefore, $this->requests, 'ab dem 4. Mal geht keine Anfrage mehr an RSI');
+        $this->assertSame($requestsBefore, $this->requests, 'ab dem 11. Mal geht keine Anfrage mehr an RSI');
         $this->assertSame('EXPG', Db::val('SELECT rsi_sid FROM organizations WHERE id = ?', [$this->orgId]));
         $post('');
         $this->assertNull(Db::val('SELECT rsi_sid FROM organizations WHERE id = ?', [$this->orgId]), 'Trennen ist nicht begrenzt');
