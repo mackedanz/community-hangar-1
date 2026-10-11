@@ -35,7 +35,7 @@ final class RsiOrg
     }
 
     /**
-     * RSI-Handle aus einem Discord-Namen: ein Zusatz in Klammern am Ende („eXpG_McDance (Micha)“) gehört nicht dazu.
+     * RSI-Handle aus einem Discord-Namen: ein Zusatz in Klammern am Ende („eXpG_McDance (Micha)“) oder am Anfang („(SpaceTrotter) mimack76“) gehört nicht dazu.
      * Gibt null zurück, wenn kein gültiger Handle (Buchstaben, Ziffern, _ und -) übrig bleibt.
      */
     public static function handleFromName(?string $name): ?string
@@ -43,7 +43,7 @@ final class RsiOrg
         if ($name === null) {
             return null;
         }
-        $h = trim((string) preg_replace('/\s*[(\[{][^)\]}]*[)\]}]\s*$/u', '', trim($name)));
+        $h = trim((string) preg_replace(['/\s*[(\[{][^)\]}]*[)\]}]\s*$/u', '/^\s*[(\[{][^)\]}]*[)\]}]\s*/u'], '', trim($name)));
         return preg_match('/^[A-Za-z0-9_-]{2,100}$/', $h) === 1 ? $h : null;
     }
 

@@ -53,6 +53,8 @@ final class RsiOrgTest extends DbTestCase
         $this->assertSame('eXpG_McDance', RsiOrg::handleFromName('eXpG_McDance (Micha)'));
         $this->assertSame('eXpG_McDance', RsiOrg::handleFromName('  eXpG_McDance  '));
         $this->assertSame('Pilot-2', RsiOrg::handleFromName('Pilot-2 [Anna]'));
+        $this->assertSame('mimack76', RsiOrg::handleFromName('(spacetrotter) mimack76'));
+        $this->assertSame('Pilot-2', RsiOrg::handleFromName('[SpaceTrotter] Pilot-2 (Anna)'));
         $this->assertNull(RsiOrg::handleFromName('Micha der Große'));
         $this->assertNull(RsiOrg::handleFromName('(nur Klammer)'));
         $this->assertNull(RsiOrg::handleFromName(null));
