@@ -69,7 +69,7 @@ $panel = 'rounded border border-cyan-800/60 bg-teal-950/50';
   <section class="space-y-3">
     <div class="flex flex-wrap items-baseline justify-between gap-2">
       <h2 class="text-lg font-semibold">Schiffe<?php if ($shipCount !== null): ?> <span class="text-sm font-normal text-zinc-400">(<?= (int) $shipCount ?>)</span><?php endif; ?></h2>
-      <?php if ($ships !== null): ?><p class="text-xs text-zinc-400">Zuletzt mit RSI synchronisiert: <?= $profile['lastSync'] ? e(dt($profile['lastSync'])) : 'noch nie' ?></p><?php endif; ?>
+      <?php if ($ships !== null): ?><p class="text-xs text-zinc-400">Zuletzt von RSI übertragen: <?= $profile['lastSync'] ? e(dt($profile['lastSync'])) : 'noch nie' ?></p><?php endif; ?>
     </div>
     <?php if ($ships === null): ?>
       <p class="text-sm text-zinc-400">Der Hangar ist nicht sichtbar.</p>

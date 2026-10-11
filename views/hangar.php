@@ -64,7 +64,7 @@ $panel = 'rounded border border-cyan-800/60 bg-teal-950/50';
   <?php endif; ?>
 
   <div class="flex flex-wrap items-center justify-between gap-3">
-    <p class="text-sm text-zinc-400">Zuletzt mit RSI synchronisiert: <?= $lastSync ? e(dt($lastSync)) : 'noch nie' ?></p>
+    <p class="text-sm text-zinc-400">Zuletzt von RSI übertragen: <?= $lastSync ? e(dt($lastSync)) : 'noch nie' ?></p>
     <div class="flex flex-wrap items-center gap-3">
       <?php if ($entries): ?>
         <span class="text-sm text-zinc-400">Gesamten Hangar exportieren:
@@ -72,7 +72,7 @@ $panel = 'rounded border border-cyan-800/60 bg-teal-950/50';
           <a href="/hangar/export?format=csv" class="text-indigo-400 hover:underline">CSV</a>
         </span>
       <?php endif; ?>
-      <a href="<?= e(Constants::RSI_PLEDGES_URL) ?>" target="_blank" rel="noopener noreferrer" data-rsi-sync class="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium hover:bg-indigo-500">Jetzt synchronisieren</a>
+      <a href="<?= e(Constants::RSI_PLEDGES_URL) ?>" target="_blank" rel="noopener noreferrer" data-rsi-sync title="Öffnet die RSI-Seite in einem neuen Tab. Dort das Lesezeichen anklicken, dann wird dein Hangar übertragen." class="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium hover:bg-indigo-500">Hangar von RSI übertragen</a>
     </div>
   </div>
   <section class="space-y-3 rounded border border-zinc-800 p-4">
