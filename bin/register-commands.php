@@ -20,7 +20,7 @@ $status = Hangar\DiscordBot::registerCommands([
         'options' => [[
             'type' => 3, // STRING
             'name' => 'rsi_kuerzel',
-            'description' => 'Kürzel der Orga auf RSI (z. B. EXPG), färbt die Rahmen in der Mitgliederliste. Gibt es keine: - eingeben',
+            'description' => 'Kürzel der Orga auf RSI (z. B. EXPG). Gibt es keine RSI-Orga: - eingeben',
             'required' => true,
             'max_length' => 20,
         ]],
