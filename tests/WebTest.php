@@ -88,15 +88,14 @@ final class WebTest extends DbTestCase
 
     public function testSortOptionsAreParsedStrictlyAndSortGermanNames(): void
     {
-        $this->assertNull(\Hangar\FleetFilter::parseSort([]));
-        $this->assertNull(\Hangar\FleetFilter::parseSort(['sort' => 'preis']));
-        $this->assertNull(\Hangar\FleetFilter::parseSort(['sort' => ['name']]));
+        $this->assertSame('name', \Hangar\FleetFilter::parseSort([]));
+        $this->assertSame('name', \Hangar\FleetFilter::parseSort(['sort' => 'preis']));
+        $this->assertSame('name', \Hangar\FleetFilter::parseSort(['sort' => ['name']]));
         $this->assertSame('name-desc', \Hangar\FleetFilter::parseSort(['sort' => 'name-desc']));
 
         $list = [['n' => 'Zeta'], ['n' => 'Ärger'], ['n' => 'anna'], ['n' => 'Berta']];
-        $names = fn (?string $s) => array_column(\Hangar\FleetFilter::sortByName($list, fn ($e) => $e['n'], $s), 'n');
-        $this->assertSame(['Zeta', 'Ärger', 'anna', 'Berta'], $names(null));
-        $this->assertSame(['anna', 'Ärger', 'Berta', 'Zeta'], $names('name'));
+        $names = fn (string $s) => array_column(\Hangar\FleetFilter::sortByName($list, fn ($e) => $e['n'], $s), 'n');
+                $this->assertSame(['anna', 'Ärger', 'Berta', 'Zeta'], $names('name'));
         $this->assertSame(['Zeta', 'Berta', 'Ärger', 'anna'], $names('name-desc'));
     }
 

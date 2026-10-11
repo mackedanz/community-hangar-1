@@ -90,25 +90,22 @@ final class FleetFilter
      * @param array<string,mixed> $params
      * @return array<string,mixed>
      */
-    /** Sortierungen der Listen (Schlüssel im Parameter "sort"); ohne Auswahl bleibt die jeweilige Standardreihenfolge. */
+    /** Sortierungen der Listen (Schlüssel im Parameter "sort"); ohne Auswahl gilt Name A–Z. */
     public const SORTS = ['name' => 'Name A–Z', 'name-desc' => 'Name Z–A'];
 
     /** @param array<string,mixed> $params */
-    public static function parseSort(array $params): ?string
+    public static function parseSort(array $params): string
     {
         $v = $params['sort'] ?? null;
-        return is_string($v) && isset(self::SORTS[$v]) ? $v : null;
+        return is_string($v) && isset(self::SORTS[$v]) ? $v : 'name';
     }
 
     /**
-     * Sortiert nach Name (Groß-/Kleinschreibung und Umlaute nach deutschen Regeln); null lässt die Reihenfolge unverändert.
+     * Sortiert nach Name (Groß-/Kleinschreibung und Umlaute nach deutschen Regeln); Standard ist A–Z.
      * @param list<array<string,mixed>> $list @param callable(array<string,mixed>):string $name @return list<array<string,mixed>>
      */
-    public static function sortByName(array $list, callable $name, ?string $sort): array
+    public static function sortByName(array $list, callable $name, string $sort = 'name'): array
     {
-        if ($sort === null) {
-            return $list;
-        }
         $collator = class_exists(\Collator::class) ? new \Collator('de_DE') : null;
         usort($list, static fn (array $a, array $b): int => $collator !== null ? (int) $collator->compare($name($a), $name($b)) : strcasecmp($name($a), $name($b)));
         return $sort === 'name-desc' ? array_reverse($list) : $list;

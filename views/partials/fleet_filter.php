@@ -8,7 +8,7 @@
  * @var array<string,string> $hidden zusätzliche versteckte Felder (z. B. kind)
  * @var bool $specs false: nur die Suche zeigen (z. B. Rüstungen im Katalog)
  * @var string $placeholder
- * @var ?string $sort gewählte Sortierung (FleetFilter::parseSort), null = Standard
+ * @var string $sort gewählte Sortierung (FleetFilter::parseSort), Standard Name A–Z
  * @var bool $boxed false: ohne eigenen Rahmen (liegt in einem umgebenden Kasten)
  */
 $hidden = $hidden ?? [];
@@ -19,8 +19,8 @@ $labels = ['career' => 'Karriere', 'role' => 'Rolle', 'status' => 'Status', 'siz
 $input = 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm' . ($boxed ? '' : ' w-full');
 // Ohne eigenen Rahmen füllen die Felder die ganze Breite des umgebenden Kastens.
 $grow = $boxed ? '' : ' min-w-28 flex-1';
-$sort = $sort ?? null;
-$filtering = $q !== '' || array_diff_key($filter, ['q' => 1]) !== [] || $sort !== null;
+$sort = $sort ?? 'name';
+$filtering = $q !== '' || array_diff_key($filter, ['q' => 1]) !== [] || $sort !== 'name';
 ?>
 <form method="get" action="<?= e($action) ?>" data-autofilter class="flex flex-wrap items-end gap-3<?= $boxed ? ' rounded border border-zinc-800 p-3' : '' ?>">
   <?php foreach ($hidden as $k => $v): ?><input type="hidden" name="<?= e($k) ?>" value="<?= e($v) ?>"><?php endforeach; ?>
@@ -29,7 +29,6 @@ $filtering = $q !== '' || array_diff_key($filter, ['q' => 1]) !== [] || $sort !=
   </label>
   <label class="flex flex-col gap-1 text-xs text-zinc-400<?= $grow ?>">Sortierung
     <select name="sort" class="<?= $input ?>">
-      <option value="">Standard</option>
       <?php foreach (\Hangar\FleetFilter::SORTS as $v => $label): ?>
         <option value="<?= e($v) ?>"<?= $sort === $v ? ' selected' : '' ?>><?= e($label) ?></option>
       <?php endforeach; ?>
