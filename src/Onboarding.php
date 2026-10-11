@@ -112,8 +112,10 @@ final class Onboarding
             throw new OrgError('Wähle zuerst mindestens eine Rolle, die das Tool nutzen darf.');
         }
         $wanted = array_values(array_unique([...$use, ...Orgs::parseRoleIds($org['planner_role_ids'])]));
+        $guildMembers = DiscordBot::members((string) $org['discord_guild_id']);
+        self::refreshNames($orgId, $guildMembers);
         $members = array_values(array_filter(
-            DiscordBot::members((string) $org['discord_guild_id']),
+            $guildMembers,
             static fn (array $m): bool => array_intersect($wanted, $m['roles']) !== [],
         ));
         $now = Time::nowDb();
@@ -151,6 +153,22 @@ final class Onboarding
             }
         }
         return $result + ['deleted' => $deleted, 'skipped' => $skipped];
+    }
+
+    /**
+     * Übernimmt Server-Nickname und Kontoname aller Mitglieder, die schon ein Konto im Tool haben, damit Namensänderungen
+     * ohne neue Anmeldung ankommen.
+     * @param list<array{id:string,nick:?string,accountName:string}> $guildMembers
+     */
+    private static function refreshNames(string $orgId, array $guildMembers): void
+    {
+        foreach ($guildMembers as $m) {
+            $nick = $m['nick'] !== null ? mb_substr($m['nick'], 0, 190) : null;
+            Db::run(
+                'UPDATE org_memberships m JOIN users u ON u.id = m.user_id SET m.nick = ?, u.name = ? WHERE m.org_id = ? AND u.discord_id = ?',
+                [$nick, mb_substr($m['accountName'], 0, 190), $orgId, $m['id']],
+            );
+        }
     }
 
     /** Kurztext zum Löschen für Meldungen (leer, wenn nichts gelöscht oder übersprungen wurde). @param array{deleted:int,skipped:int} $r */

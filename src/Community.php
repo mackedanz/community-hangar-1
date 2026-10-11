@@ -205,7 +205,7 @@ final class Community
         $showAch = Visibility::canView($user['achievements_visibility'], $user['id'], $orgIds, $viewer);
 
         return [
-            'user' => ['id' => $user['id'], 'name' => $user['name'], 'image' => $user['image'], 'rsiHandle' => $rsiHandle,
+            'user' => ['id' => $user['id'], 'name' => self::displayName($user, $viewer), 'image' => $user['image'], 'rsiHandle' => $rsiHandle,
                 'rsiUrl' => $rsiHandle !== null ? Constants::RSI_BASE_URL . '/en/citizens/' . rawurlencode($rsiHandle) : null],
             // Das Profil zeigt nur Schiffe; Ausrüstung, Paints und Sonstiges bleiben dem eigenen Hangar vorbehalten.
             'items' => $showHangar ? array_values(array_filter(Hangar::listHangar($userId), static fn (array $e): bool => $e['kind'] === 'SHIP')) : null,
@@ -216,6 +216,17 @@ final class Community
             ) : null,
             'lastSync' => $showHangar ? self::getLastSync($userId) : null,
         ];
+    }
+
+    /** Name wie in der Mitgliederliste: Server-Nickname einer gemeinsamen Orga, sonst der Discord-Kontoname. @param array<string,mixed> $user */
+    private static function displayName(array $user, Viewer $viewer): string
+    {
+        $orgIds = $viewer->orgIds();
+        $nick = $orgIds === [] ? null : Db::val(
+            'SELECT nick FROM org_memberships WHERE user_id = ? AND nick IS NOT NULL AND org_id IN (' . Db::in($orgIds) . ') ORDER BY org_id LIMIT 1',
+            [$user['id'], ...$orgIds],
+        );
+        return $nick !== null ? (string) $nick : (string) $user['name'];
     }
 
     /**

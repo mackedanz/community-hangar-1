@@ -268,6 +268,23 @@ final class OnboardingTest extends DbTestCase
         $this->assertSame([self::ADMIN], $this->ids('org_allowed_members', 'discord_id'));
     }
 
+    public function testSyncRefreshesNicknameAndAccountNameOfExistingMembers(): void
+    {
+        $orgId = $this->setUpOrgWithUseRole();
+        $uid = new_id();
+        Db::insert('users', ['id' => $uid, 'name' => 'Alt', 'discord_id' => '700000000000000002']);
+        Db::insert('org_memberships', ['user_id' => $uid, 'org_id' => $orgId, 'nick' => 'Alter Nick']);
+
+        $this->members[1]['nick'] = 'Neuer Nick';
+        Onboarding::syncAllowlist($orgId);
+        $this->assertSame('Neuer Nick', Db::val('SELECT nick FROM org_memberships WHERE user_id = ?', [$uid]));
+        $this->assertSame('Pilot', Db::val('SELECT name FROM users WHERE id = ?', [$uid]));
+
+        unset($this->members[1]['nick']);
+        Onboarding::syncAllowlist($orgId);
+        $this->assertNull(Db::val('SELECT nick FROM org_memberships WHERE user_id = ?', [$uid]));
+    }
+
     private function accountFor(string $discordId): string
     {
         $uid = new_id();

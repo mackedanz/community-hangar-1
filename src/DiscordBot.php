@@ -68,7 +68,7 @@ final class DiscordBot
 
     /**
      * Alle Mitglieder des Servers (seitenweise à 1000). Braucht den privilegierten Intent "Server Members".
-     * @return list<array{id:string,name:string,avatar:?string,roles:list<string>}>
+     * @return list<array{id:string,name:string,nick:?string,accountName:string,avatar:?string,roles:list<string>}>
      */
     public static function members(string $guildId): array
     {
@@ -98,6 +98,8 @@ final class DiscordBot
                 $out[] = [
                     'id' => $id,
                     'name' => (string) (($m['nick'] ?? null) ?: ($u['global_name'] ?? null) ?: ($u['username'] ?? 'Discord-Nutzer')),
+                    'nick' => (($m['nick'] ?? null) ?: null) !== null ? (string) $m['nick'] : null,
+                    'accountName' => (string) (($u['global_name'] ?? null) ?: ($u['username'] ?? 'Discord-Nutzer')),
                     'avatar' => $avatar,
                     'roles' => array_values(array_map('strval', is_array($m['roles'] ?? null) ? $m['roles'] : [])),
                 ];
