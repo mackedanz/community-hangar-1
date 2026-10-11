@@ -163,6 +163,15 @@ final class OnboardingTest extends DbTestCase
         $this->assertSame('EXPG', Db::val('SELECT rsi_sid FROM organizations'));
     }
 
+    public function testDashMeansNoRsiOrgAndConnectsNothing(): void
+    {
+        $res = $this->json($this->post($this->command('8', ['data' => ['name' => 'einrichten', 'options' => [['name' => 'rsi_kuerzel', 'type' => 3, 'value' => '-']]]])));
+        $this->assertStringContainsString('Community-Hangar: ', $res['data']['content']);
+        $this->assertNull(Db::val('SELECT rsi_sid FROM organizations'));
+        $calls = array_filter($this->calls, static fn (array $c): bool => str_contains($c[1], 'getOrgMembers'));
+        $this->assertSame([], array_values($calls), 'keine Anfrage an RSI');
+    }
+
     public function testApiTokenStopsWorkingWhenPersonIsRemovedFromTheAllowlist(): void
     {
         Env::set('LOGIN_REQUIRES_ALLOWLIST', '1');

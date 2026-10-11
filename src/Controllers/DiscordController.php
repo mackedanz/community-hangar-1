@@ -194,7 +194,7 @@ final class DiscordController extends Controller
     }
 
     /**
-     * /einrichten, optional mit dem RSI-Kürzel der Orga: wird sofort geprüft (nur Seite 1 der Mitgliederliste),
+     * /einrichten mit dem RSI-Kürzel der Orga (Pflichtfeld, „-“ = keine): wird sofort geprüft (nur Seite 1 der Mitgliederliste),
      * der volle Abgleich läuft danach im Hintergrund und aktualisiert die Nachricht.
      * @param array<string,mixed> $org @param array<string,mixed> $i
      */
@@ -206,7 +206,8 @@ final class DiscordController extends Controller
                 $sid = trim((string) ($opt['value'] ?? ''));
             }
         }
-        if ($sid === null || $sid === '') {
+        // „-“ heißt: keine RSI-Orga (das Feld ist Pflicht, damit es beim Einrichten nicht übersehen wird).
+        if ($sid === null || $sid === '' || $sid === '-') {
             return self::panel($org, self::REPLY, null);
         }
         try {

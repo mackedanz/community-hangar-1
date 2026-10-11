@@ -20,8 +20,8 @@ $status = Hangar\DiscordBot::registerCommands([
         'options' => [[
             'type' => 3, // STRING
             'name' => 'rsi_kuerzel',
-            'description' => 'Kürzel der Orga auf RSI (z. B. EXPG): färbt in der Mitgliederliste den Rahmen nach RSI-Zugehörigkeit',
-            'required' => false,
+            'description' => 'Kürzel der Orga auf RSI (z. B. EXPG), färbt die Rahmen in der Mitgliederliste. Gibt es keine: - eingeben',
+            'required' => true,
             'max_length' => 20,
         ]],
         'default_member_permissions' => '32', // "Server verwalten"; die App prüft die Rechte zusätzlich selbst
